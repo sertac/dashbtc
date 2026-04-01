@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill *)",
+      "Bash(sleep *)",
+      "Bash(source *)",
+      "Bash(nohup *)"
+    ]
+  },
+  "$version": 3
+}

@@ -557,6 +557,12 @@ WHALE_REFRESH  = 90  # Whale Alerts: 90sn
 WHALE_MIN_BTC  = 20  # Minimum BTC transfer (≥20 BTC seviyesi)
 WHALE_EXCHANGES = ["binance","coinbase","bitstamp","kraken","gemini","huobi","okx","bybit","kucoin"]
 
+# Telegram Bot Config
+TELEGRAM_ENABLED = True
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")  # BotFather token
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")  # Senin chat ID
+TELEGRAM_WINRATE_INTERVAL = 3600  # Saatlik win rate (saniye)
+
 NEWS_FEEDS = [
     {"name": "Google News", "url": "", "dynamic": True},
     {"name": "CoinDesk",      "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
@@ -1058,6 +1064,106 @@ def _mkt_add_history():
         _mkt_history = _mkt_history[-120:]
     # DB'ye kaydet
     db_insert_market_history(SYMBOL, {**history_entry, "ts": now_ts, **_mkt_cache})
+
+# Telegram Bot Helper
+def telegram_send_message(message):
+    """Telegram'a mesaj gönder."""
+    if not TELEGRAM_ENABLED or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False
+    
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+        requests.post(url, json=data, timeout=5)
+        print(f"[TG] Mesaj gönderildi: {message[:50]}...")
+        return True
+    except Exception as e:
+        print(f"[TG HATA] {e}")
+        return False
+
+def telegram_signal_opened(sig):
+    """Sinyal açıldı bildirim."""
+    if not TELEGRAM_ENABLED:
+        return
+    
+    direction_emoji = "🟢" if sig["dir"] == "LONG" else "🔴"
+    message = f"""
+{direction_emoji} <b>YENİ SİNYAL</b> {direction_emoji}
+
+📊 <b>{SYMBOL}</b>
+📈 <b>{sig["dir"]}</b>
+💰 Giriş: ${sig["entry"]}
+🎯 TP: ${sig["tp"]} (+{sig["net_tp_pct"]}%)
+🛑 SL: ${sig["sl"]} (-{sig["net_sl_pct"]}%)
+⭐ Skor: {sig["score"]}/4 ({sig["conf_total"]}/100)
+📊 Confluence: {sig["conf_grade"]}
+
+#Signal #{"LONG" if sig["dir"] == "LONG" else "SHORT"}
+"""
+    telegram_send_message(message.strip())
+
+def telegram_signal_closed(sig, outcome):
+    """Sinyal kapandı bildirim."""
+    if not TELEGRAM_ENABLED:
+        return
+    
+    result_emoji = "✅" if outcome == "WIN" else "❌"
+    pnl_color = "✅" if sig.get("net_pnl_pct", 0) > 0 else "❌"
+    pnl_sign = "+" if sig.get("net_pnl_pct", 0) > 0 else ""
+    
+    message = f"""
+{result_emoji} <b>SİNYAL KAPANDI</b> {result_emoji}
+
+📊 <b>{SYMBOL}</b>
+📈 <b>{sig["dir"]}</b>
+💰 Giriş: ${sig["entry"]}
+🚪 Çıkış: ${sig.get("exit_price", 0)}
+{pnl_color} <b>P/L: {pnl_sign}{sig.get("net_pnl_pct", 0)}%</b>
+💵 P/L: ${pnl_sign}{sig.get("net_pnl_usd", 0):.2f}
+⏱ Süre: {sig.get("duration_min", 0)} dk
+📝 Sebep: {sig.get("close_reason", "—")}
+
+#{"WIN" if outcome == "WIN" else "LOSS"} #{"LONG" if sig["dir"] == "LONG" else "SHORT"}
+"""
+    telegram_send_message(message.strip())
+
+def telegram_winrate_update(stats):
+    """Saatlik win rate güncellemesi."""
+    if not TELEGRAM_ENABLED:
+        return
+    
+    total = stats.get("total", 0)
+    wins = stats.get("wins", 0)
+    win_rate = stats.get("win_rate", 0)
+    
+    # Emoji belirle
+    if win_rate >= 60:
+        emoji = "🔥"
+        color = "✅"
+    elif win_rate >= 45:
+        emoji = "⚪"
+        color = "🟡"
+    else:
+        emoji = "❄️"
+        color = "❌"
+    
+    message = f"""
+{emoji} <b>SAATLİK WIN RATE</b> {emoji}
+
+📊 <b>{SYMBOL}</b>
+📈 Toplam: {total} sinyal
+{color} <b>Win: {wins} | Loss: {total-wins}</b>
+🎯 <b>Win Rate: {win_rate}%</b>
+💰 Net P/L: {stats.get("net_pnl_pct", 0):+.2f}% (${stats.get("net_pnl_usd", 0):+.2f})
+
+#WinRate #Stats
+"""
+    telegram_send_message(message.strip())
+
 _news_cache      = []
 _news_last_fetch = -999
 _tweet_cache     = []
@@ -2244,6 +2350,9 @@ def _close_signal(sig, outcome, net_pnl_pct, net_pnl_usd, close_ts, exit_price=N
             print(f"[DB HATA] close_signal: {e}")
     print(f"[SİNYAL] {sig['dir']} {outcome} | {close_reason or '?'} | PnL:{net_pnl_pct}% | Çıkış:{exit_price}")
 
+    # Telegram bildirim
+    telegram_signal_closed(sig, outcome)
+
     # RL Threshold Optimizasyonu — Her sinyal kapandığında reward hesapla
     global _rl_stats, _rl_last_signal
     _rl_stats["signals_closed"] += 1
@@ -2368,6 +2477,9 @@ def background_loop():
     global _eth_staking_cache, _eth_staking_last_fetch
     global _eth_onchain_cache, _eth_onchain_last_fetch
     global _FLASH_NEWS_CACHE, _FLASH_NEWS_LAST_FETCH
+    global _last_winrate_notify  # Saatlik win rate için
+    
+    _last_winrate_notify = 0  # Son win rate bildirimi
     while True:
         try:
             now=time.time()
@@ -2400,6 +2512,17 @@ def background_loop():
             if now-_eth_onchain_last_fetch>=WHALE_REFRESH:
                 try: _eth_onchain_cache=fetch_eth_onchain(); _eth_onchain_last_fetch=now
                 except Exception as e: print(f"[ETH On-Chain Hata] {e}")
+            
+            # Saatlik win rate bildirimi (Telegram)
+            if now - _last_winrate_notify >= TELEGRAM_WINRATE_INTERVAL:
+                try:
+                    stats = calc_win_stats(SYMBOL)
+                    if stats.get("total", 0) > 0:  # En az 1 sinyal varsa
+                        telegram_winrate_update(stats)
+                        _last_winrate_notify = now
+                        print(f"[TG] Saatlik win rate gönderildi: {stats['win_rate']}%")
+                except Exception as e:
+                    print(f"[TG WINRATE HATA] {e}")
             ticker=exchange.fetch_ticker(SYMBOL); price=float(ticker["last"]); change24h=float(ticker.get("percentage",0) or 0)
             ob=exchange.fetch_order_book(SYMBOL,OB_DEPTH); df=fetch_ohlcv(); df=calc_indicators(df)
             _df_cache = df  # RL reward hesaplaması için global cache
@@ -2480,6 +2603,9 @@ def background_loop():
                     new_sig["_db_id"] = None
                 _pending_signals.append(new_sig)
                 print(f"[YENİ SİNYAL] {sig['dir']} @ {sig['entry']} ★{sig['score']} DB:{new_sig['_db_id']} — wait_count=0")
+                
+                # Telegram bildirim
+                telegram_signal_opened(new_sig)
             # Önce pending sinyalleri kontrol et (kapanan var mı?)
             check_pending_signals(df)
             

@@ -1,0 +1,1260 @@
+{
+  "pending": [
+    {
+      "dir": "SHORT",
+      "entry": 2035.81,
+      "tp": 1995.09,
+      "sl": 2056.17,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 34.61,
+      "net_sl_usd": 26.47,
+      "comm_usd": 6.11,
+      "wall_price": 2036.8279049999999,
+      "wall_vol": 667.37,
+      "dist_pct": 0.05,
+      "score": 3,
+      "checks": [
+        {
+          "label": "EMA9<21",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "RSI n\u00f6tr (37)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.0",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h BEAR \u2713 (4/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0027%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.36%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT (1.85)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d71.06)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 1,
+      "ts": "10:15:07",
+      "symbol": "ETH/USDT",
+      "entry_candle_idx": 99,
+      "waited_count": 1
+    }
+  ],
+  "closed": [
+    {
+      "dir": "LONG",
+      "entry": 68285.5,
+      "tp": 69651.21,
+      "sl": 67602.65,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 1160.85,
+      "net_sl_usd": 887.71,
+      "comm_usd": 204.86,
+      "wall_price": 68217.2145,
+      "wall_vol": 4.17,
+      "dist_pct": 0.1,
+      "score": 1,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI a\u015f\u0131r\u0131 sat\u0131m (33)",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "Hacim normal \u00d70.6",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0028%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.10%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG \u2192 contrarian risk (1.72)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\ud83d\udeab Agresif sat\u0131c\u0131lar \u2192 LONG aleyhte (\u00d70.79)",
+          "status": "fail",
+          "side": "short"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "22:29:58",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -887.71,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 68250.4,
+      "tp": 66885.39,
+      "sl": 68932.9,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 1160.26,
+      "net_sl_usd": 887.26,
+      "comm_usd": 204.75,
+      "wall_price": 68284.52519999999,
+      "wall_vol": 17.97,
+      "dist_pct": 0.05,
+      "score": 4,
+      "checks": [
+        {
+          "label": "EMA9<21",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "RSI n\u00f6tr (33)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.2",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2713 (4/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0028%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.10%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.72)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u2713 Agresif sat\u0131c\u0131lar \u2192 SHORT lehine (\u00d70.79)",
+          "status": "pass",
+          "side": "short"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 2,
+      "ts": "22:30:14",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 1160.26,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 2058.05,
+      "tp": 2016.89,
+      "sl": 2078.63,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 34.99,
+      "net_sl_usd": 26.75,
+      "comm_usd": 6.17,
+      "wall_price": 2059.0790250000005,
+      "wall_vol": 964.03,
+      "dist_pct": 0.05,
+      "score": 4,
+      "checks": [
+        {
+          "label": "EMA9<21",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "RSI n\u00f6tr (30)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.2",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2713 (4/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0028%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.10%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.72)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u2713 Agresif sat\u0131c\u0131lar \u2192 SHORT lehine (\u00d70.80)",
+          "status": "pass",
+          "side": "short"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 2,
+      "ts": "22:30:32",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -26.75,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "LONG",
+      "entry": 2058.05,
+      "tp": 2099.21,
+      "sl": 2037.47,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 34.99,
+      "net_sl_usd": 26.75,
+      "comm_usd": 6.17,
+      "wall_price": 2055.99195,
+      "wall_vol": 218.1,
+      "dist_pct": 0.1,
+      "score": 1,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI a\u015f\u0131r\u0131 sat\u0131m (30)",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "Hacim normal \u00d70.2",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0028%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.10%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG \u2192 contrarian risk (1.72)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\ud83d\udeab Agresif sat\u0131c\u0131lar \u2192 LONG aleyhte (\u00d70.80)",
+          "status": "fail",
+          "side": "short"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "22:30:32",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 34.99,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 68704.3,
+      "tp": 67330.21,
+      "sl": 69391.34,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 1167.97,
+      "net_sl_usd": 893.16,
+      "comm_usd": 206.11,
+      "wall_price": 68738.65215000001,
+      "wall_vol": 13.55,
+      "dist_pct": 0.05,
+      "score": 3,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI a\u015f\u0131r\u0131 al\u0131m (68)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "Hacim normal \u00d70.4",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2713 (3/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0016%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (-0.30%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.85)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\ud83d\udeab Agresif al\u0131c\u0131lar \u2192 SHORT aleyhte (\u00d71.32)",
+          "status": "fail",
+          "side": "long"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "piyasa verisi",
+      "mkt_score": 1,
+      "ts": "08:28:09",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 1167.97,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 68599.8,
+      "tp": 67227.8,
+      "sl": 69285.8,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 1166.2,
+      "net_sl_usd": 891.8,
+      "comm_usd": 205.8,
+      "wall_price": 68634.0999,
+      "wall_vol": 10.27,
+      "dist_pct": 0.05,
+      "score": 2,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI n\u00f6tr (62)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.3",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2713 (3/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0016%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (-0.09%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.85)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d71.00)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 1,
+      "ts": "08:31:43",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 1166.2,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "LONG",
+      "entry": 68599.8,
+      "tp": 69971.8,
+      "sl": 67913.8,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 1166.2,
+      "net_sl_usd": 891.8,
+      "comm_usd": 205.8,
+      "wall_price": 68531.2002,
+      "wall_vol": 21.91,
+      "dist_pct": 0.1,
+      "score": 1,
+      "checks": [
+        {
+          "label": "EMA9>21",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "RSI n\u00f6tr (62)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.3",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0016%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (-0.09%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG \u2192 contrarian risk (1.85)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d71.00)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "08:31:43",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -891.8,
+      "close_ts": "08:49:55 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 629.61,
+      "tp": 617.02,
+      "sl": 635.91,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 10.7,
+      "net_sl_usd": 8.18,
+      "comm_usd": 1.89,
+      "wall_price": 629.924805,
+      "wall_vol": 1284.07,
+      "dist_pct": 0.05,
+      "score": 3,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI n\u00f6tr (56)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.5",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Bearish Pin Bar \ud83d\udccc",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "1h trend BEAR \u2713 (3/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0016%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.04%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.84)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d70.81)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 1,
+      "ts": "08:47:35",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -8.18,
+      "close_ts": "08:53:01 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "LONG",
+      "entry": 629.61,
+      "tp": 642.2,
+      "sl": 623.31,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 10.7,
+      "net_sl_usd": 8.18,
+      "comm_usd": 1.89,
+      "wall_price": 628.98039,
+      "wall_vol": 1723.97,
+      "dist_pct": 0.1,
+      "score": 1,
+      "checks": [
+        {
+          "label": "EMA9>21",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "RSI n\u00f6tr (56)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.5",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0016%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.04%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG \u2192 contrarian risk (1.84)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d70.81)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "08:47:35",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 10.7,
+      "close_ts": "08:53:01 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 2059.78,
+      "tp": 2018.58,
+      "sl": 2080.38,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 35.02,
+      "net_sl_usd": 26.78,
+      "comm_usd": 6.18,
+      "wall_price": 2060.8098900000005,
+      "wall_vol": 585.32,
+      "dist_pct": 0.05,
+      "score": 3,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI n\u00f6tr (49)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.1",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2713 (3/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0018%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.13%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.83)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u2713 Agresif sat\u0131c\u0131lar \u2192 SHORT lehine (\u00d70.77)",
+          "status": "pass",
+          "side": "short"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 2,
+      "ts": "08:50:13",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -26.78,
+      "close_ts": "08:55:32 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "LONG",
+      "entry": 2059.78,
+      "tp": 2100.98,
+      "sl": 2039.18,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 35.02,
+      "net_sl_usd": 26.78,
+      "comm_usd": 6.18,
+      "wall_price": 2057.72022,
+      "wall_vol": 147.84,
+      "dist_pct": 0.1,
+      "score": 1,
+      "checks": [
+        {
+          "label": "EMA9>21",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "RSI n\u00f6tr (49)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.1",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0018%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.13%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG \u2192 contrarian risk (1.83)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\ud83d\udeab Agresif sat\u0131c\u0131lar \u2192 LONG aleyhte (\u00d70.77)",
+          "status": "fail",
+          "side": "short"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "08:50:13",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 35.02,
+      "close_ts": "08:55:32 (timeout)",
+      "symbol": "BTC/USDT"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 2064.33,
+      "tp": 2023.04,
+      "sl": 2084.97,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 35.09,
+      "net_sl_usd": 26.84,
+      "comm_usd": 6.19,
+      "wall_price": 2065.362165,
+      "wall_vol": 558.58,
+      "dist_pct": 0.05,
+      "score": 2,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI n\u00f6tr (57)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.1",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2713 (3/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0019%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.15%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT f\u0131rsat\u0131 (1.83)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d71.00)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 1,
+      "ts": "08:55:50",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "symbol": "BTC/USDT",
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 35.09,
+      "close_ts": "10:09:10 (timeout)"
+    },
+    {
+      "dir": "LONG",
+      "entry": 2064.33,
+      "tp": 2105.62,
+      "sl": 2043.69,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 35.09,
+      "net_sl_usd": 26.84,
+      "comm_usd": 6.19,
+      "wall_price": 2062.26567,
+      "wall_vol": 480.12,
+      "dist_pct": 0.1,
+      "score": 1,
+      "checks": [
+        {
+          "label": "EMA9>21",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "RSI n\u00f6tr (57)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d70.1",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h trend BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0019%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.15%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG \u2192 contrarian risk (1.83)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d71.00)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "08:55:50",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "symbol": "BTC/USDT",
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -26.84,
+      "close_ts": "10:09:10 (timeout)"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 67744.6,
+      "tp": 66389.71,
+      "sl": 68422.05,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 1151.66,
+      "net_sl_usd": 880.68,
+      "comm_usd": 203.23,
+      "wall_price": 67778.47230000001,
+      "wall_vol": 14.81,
+      "dist_pct": 0.05,
+      "score": 3,
+      "checks": [
+        {
+          "label": "EMA9<21",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "RSI n\u00f6tr (32)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim normal \u00d71.8",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h BEAR \u2713 (3/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0030%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.31%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT (1.85)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d70.87)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 1,
+      "ts": "10:08:19",
+      "symbol": "BTC/USDT",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 1151.66,
+      "close_ts": "10:13:42 (timeout)"
+    },
+    {
+      "dir": "SHORT",
+      "entry": 2031.68,
+      "tp": 1991.05,
+      "sl": 2052.0,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 34.54,
+      "net_sl_usd": 26.41,
+      "comm_usd": 6.1,
+      "wall_price": 2032.69584,
+      "wall_vol": 1198.39,
+      "dist_pct": 0.05,
+      "score": 4,
+      "checks": [
+        {
+          "label": "EMA9<21",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "RSI n\u00f6tr (31)",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "Hacim spike \u00d72.7",
+          "status": "pass",
+          "side": "neutral"
+        },
+        {
+          "label": "Net formasyon yok",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "1h BEAR \u2713 (4/4)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0029%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.32%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u2713 Kalabal\u0131k LONG \u2192 SHORT (1.85)",
+          "status": "pass",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d70.87)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": false,
+      "htf_trend": "BEAR",
+      "block_reason": "",
+      "mkt_score": 1,
+      "ts": "10:09:28",
+      "symbol": "ETH/USDT",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "LOSS",
+      "net_pnl_pct": -1.3,
+      "net_pnl_usd": -26.41,
+      "close_ts": "10:14:49 (timeout)"
+    },
+    {
+      "dir": "LONG",
+      "entry": 2031.68,
+      "tp": 2072.31,
+      "sl": 2011.36,
+      "net_tp_pct": 1.7,
+      "net_sl_pct": 1.3,
+      "net_tp_usd": 34.54,
+      "net_sl_usd": 26.41,
+      "comm_usd": 6.1,
+      "wall_price": 2029.64832,
+      "wall_vol": 90.26,
+      "dist_pct": 0.1,
+      "score": 3,
+      "checks": [
+        {
+          "label": "EMA aleyhte",
+          "status": "fail",
+          "side": ""
+        },
+        {
+          "label": "RSI diverjans (31)",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "Hacim spike \u00d72.7",
+          "status": "pass",
+          "side": "neutral"
+        },
+        {
+          "label": "Bullish Pin Bar \ud83d\udccc",
+          "status": "pass",
+          "side": "long"
+        },
+        {
+          "label": "1h BEAR \u2014 LONG engellendi",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Funding n\u00f6tr (-0.0029%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\u00b7 OI n\u00f6tr (+0.32%)",
+          "status": "warn",
+          "side": "neutral"
+        },
+        {
+          "label": "\ud83d\udeab Kalabal\u0131k LONG (1.85)",
+          "status": "fail",
+          "side": "short"
+        },
+        {
+          "label": "\u00b7 Taker dengeli (\u00d70.87)",
+          "status": "warn",
+          "side": "neutral"
+        }
+      ],
+      "htf_blocked": true,
+      "htf_trend": "BEAR",
+      "block_reason": "1h BEAR + piyasa verisi",
+      "mkt_score": 0,
+      "ts": "10:09:28",
+      "symbol": "ETH/USDT",
+      "entry_candle_idx": 99,
+      "waited_count": 20,
+      "outcome": "WIN",
+      "net_pnl_pct": 1.7,
+      "net_pnl_usd": 34.54,
+      "close_ts": "10:14:49 (timeout)"
+    }
+  ]
+}

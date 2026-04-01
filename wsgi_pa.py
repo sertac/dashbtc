@@ -22,6 +22,11 @@ os.environ['FLASK_ENV'] = 'production'
 os.environ['SECRET_KEY'] = 'pythonanywhere_secret_2026_sertac'
 os.environ['PORT'] = '5007'
 
+# Telegram Bot (PythonAnywhere'de env vars kullan)
+# Web app'de "Environment variables" bölümünden ekle:
+# TELEGRAM_BOT_TOKEN=your_token_here
+# TELEGRAM_CHAT_ID=your_chat_id_here
+
 # Change to project directory
 os.chdir(project_home)
 
