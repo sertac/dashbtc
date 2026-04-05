@@ -3977,20 +3977,30 @@ def background_loop():
             import traceback; traceback.print_exc()
             # Hata olsa bile kısmi state güncelle — dashboard boş kalmasın
             try:
+                partial = {
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "symbol": SYMBOL,
+                    "htf": dict(_htf_cache) if _htf_cache else {},
+                    "mkt": dict(_mkt_cache) if _mkt_cache else {},
+                    "signals": [],
+                    "candles": [],
+                    "pending": [],
+                    "closed": [],
+                    "stats": calc_win_stats(SYMBOL),
+                    "news": _news_cache[:25] if '_news_cache' in dir() else [],
+                    "tweets": _tweet_cache[:20] if '_tweet_cache' in dir() else [],
+                    "flash_news": _FLASH_NEWS_CACHE if '_FLASH_NEWS_CACHE' in dir() else [],
+                    "eth_staking": dict(_eth_staking_cache) if '_eth_staking_cache' in dir() and _eth_staking_cache else None,
+                    "eth_onchain": dict(_eth_onchain_cache) if '_eth_onchain_cache' in dir() and _eth_onchain_cache else None,
+                    "error": str(e)[:300],
+                }
+                # price değişkeni varsa ekle
+                try:
+                    partial["price"] = price
+                except NameError:
+                    partial["price"] = 0
                 with _lock:
-                    _state.update({
-                        "ts": datetime.now().strftime("%H:%M:%S"),
-                        "symbol": SYMBOL,
-                        "price": price if 'price' in dir() else 0,
-                        "htf": _htf_cache,
-                        "mkt": _mkt_cache,
-                        "signals": [],
-                        "candles": [],
-                        "pending": [],
-                        "closed": [],
-                        "stats": calc_win_stats(SYMBOL),
-                        "error": str(e)[:200],
-                    })
+                    _state.update(partial)
             except Exception as e2:
                 print(f"[BG LOOP FALLBACK HATA] {e2}", flush=True)
         time.sleep(REFRESH_SEC)
