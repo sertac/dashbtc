@@ -1,19 +1,31 @@
 #!/usr/bin/env python3
 """
-BTC/USDT Signal Bot - WSGI Entry Point
-Production deployment file
+BTC/USDT Signal Bot — WSGI Entry Point
+Production deployment (Render / Railway / Gunicorn)
 """
-
 import sys
 import os
+import threading
+import time
 
-# Add project directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import Flask app from btc35.py
-from btc35 import app, load_signals, db_init
+from btc35 import app, db_init, load_signals, background_loop
 
-# Initialize database and load signals
+def _start_background_loop():
+    """Background loop'u ayrı thread'de başlat."""
+    def _run():
+        try:
+            background_loop()
+        except Exception as e:
+            print(f"[WSGI BG LOOP CRASH] {e}")
+            import traceback
+            traceback.print_exc()
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    print("[WSGI] Background loop thread started")
+
+# DB init + signals load
 try:
     db_init()
     load_signals()
@@ -21,8 +33,15 @@ try:
 except Exception as e:
     print(f"[WSGI ERROR] Initialization: {e}")
 
-# Expose application for WSGI server
+# Background loop başlat (sadece ilk worker'da — Render'da tek worker var)
+_worker_id = os.environ.get("GUNICORN_WORKER_ID", "0")
+if _worker_id == "0":
+    _start_background_loop()
+
+# WSGI application
 application = app
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5007, threaded=True)
+    port = int(os.environ.get("PORT", 5007))
+    _start_background_loop()
+    app.run(host="0.0.0.0", port=port, threaded=True)

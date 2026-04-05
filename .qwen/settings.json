@@ -4,7 +4,9 @@
       "Bash(pkill *)",
       "Bash(sleep *)",
       "Bash(source *)",
-      "Bash(nohup *)"
+      "Bash(nohup *)",
+      "Bash(python *)",
+      "Bash(lsof *)"
     ]
   },
   "$version": 3
