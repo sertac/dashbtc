@@ -910,8 +910,31 @@ def _get_rconn():
 def _db_writer_loop():
     """DB yazma thread'i — PostgreSQL veya SQLite."""
     if _USE_POSTGRES:
-        conn = psycopg2.connect(DATABASE_URL)
-        conn.autocommit = False
+        raw_conn = psycopg2.connect(DATABASE_URL)
+        raw_conn.autocommit = False
+
+        # PostgreSQL connection wrapper — sqlite3 conn.execute() uyumluluğu
+        class _PgCompatConn:
+            def __init__(self, conn):
+                self._conn = conn
+            def execute(self, sql, params=None):
+                # ? → %s çevirisi (SQLite → PostgreSQL)
+                sql = sql.replace("?", "%s")
+                cur = self._conn.cursor()
+                cur.execute(sql, params or ())
+                return cur
+            def executemany(self, sql, seq_of_params):
+                sql = sql.replace("?", "%s")
+                cur = self._conn.cursor()
+                cur.executemany(sql, seq_of_params)
+                return cur
+            def commit(self):
+                self._conn.commit()
+            def rollback(self):
+                self._conn.rollback()
+            def close(self):
+                self._conn.close()
+        conn = _PgCompatConn(raw_conn)
     else:
         conn = sqlite3.connect(DB_FILE, check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -952,10 +975,11 @@ def _db_read(sql, params=()):
         conn = _get_rconn()
         with _db_rlock:
             if _USE_POSTGRES:
+                # PostgreSQL: ? → %s
+                sql = sql.replace("?", "%s")
                 cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cur.execute(sql, params)
                 rows = cur.fetchall()
-                # RealDictRow → dict
                 return [dict(r) for r in rows]
             else:
                 rows = conn.execute(sql, params).fetchall()
