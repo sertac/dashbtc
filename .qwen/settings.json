@@ -6,7 +6,8 @@
       "Bash(source *)",
       "Bash(nohup *)",
       "Bash(python *)",
-      "Bash(lsof *)"
+      "Bash(lsof *)",
+      "Bash(curl *)"
     ]
   },
   "$version": 3

@@ -6587,6 +6587,20 @@ def market_history():
     """Piyasa verisi history (grafik için) JSON döndür."""
     return json.dumps({"history": _mkt_history})
 
+@app.route("/debug/status")
+def debug_status():
+    """Debug endpoint — background loop durumunu göster."""
+    return json.dumps({
+        "symbol": SYMBOL,
+        "mkt_history_len": len(_mkt_history),
+        "pending_signals": len(_pending_signals),
+        "closed_signals": len(_closed_signals),
+        "mkt_cache": bool(_mkt_cache.get("ts")),
+        "htf_cache": bool(_htf_cache.get("ts")),
+        "use_postgres": _USE_POSTGRES,
+        "api_failures": dict(_api_failures),
+    })
+
 @app.route("/history")
 def history():
     """Son 200 kapanmış sinyali JSON olarak döndür."""
