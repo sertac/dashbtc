@@ -3627,6 +3627,24 @@ def background_loop():
                         print(f"[MKT Hata] {e}")
                         _api_record_failure("market_data")
 
+            # ── Kısmi state güncelle — dashboard boş kalmasın ──
+            try:
+                with _lock:
+                    _state.update({
+                        "ts": datetime.now().strftime("%H:%M:%S"),
+                        "symbol": SYMBOL,
+                        "htf": dict(_htf_cache) if _htf_cache else {},
+                        "mkt": dict(_mkt_cache) if _mkt_cache else {},
+                        "signals": [],
+                        "candles": [],
+                        "pending": list(_pending_signals),
+                        "closed": [],
+                        "stats": {},
+                        "flash_news": _FLASH_NEWS_CACHE if '_FLASH_NEWS_CACHE' in dir() else [],
+                    })
+            except Exception as e:
+                print(f"[STATE UPDATE HATA] {e}", flush=True)
+
             # Likidasyon verisi (her 60 sn)
             if now-_liq_last_fetch>=60:
                 if _api_should_skip("liquidations", now, _liq_last_fetch):
