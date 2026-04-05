@@ -920,9 +920,19 @@ def _db_writer_loop():
             def execute(self, sql, params=None):
                 # ? → %s çevirisi (SQLite → PostgreSQL)
                 sql = sql.replace("?", "%s")
-                cur = self._conn.cursor()
-                cur.execute(sql, params or ())
-                return cur
+                try:
+                    cur = self._conn.cursor()
+                    cur.execute(sql, params or ())
+                    return cur
+                except Exception:
+                    # Transaction aborted → rollback ve tekrar dene
+                    try:
+                        self._conn.rollback()
+                    except Exception:
+                        pass
+                    cur = self._conn.cursor()
+                    cur.execute(sql, params or ())
+                    return cur
             def executemany(self, sql, seq_of_params):
                 sql = sql.replace("?", "%s")
                 cur = self._conn.cursor()
@@ -998,6 +1008,17 @@ def db_init():
     default_ts = "NOW()" if _USE_POSTGRES else "datetime('now')"
 
     def _fn(conn):
+        # Drop existing tables to ensure clean schema (safe for fresh Neon DB)
+        # Her DROP ayrı try/except ile — bir hata diğerlerini engellemesin
+        for table in ["signals", "market_history", "manual_positions",
+                      "win_rate_history", "eth_onchain_history"]:
+            try:
+                conn.execute(f"DROP TABLE IF EXISTS {table}")
+                if _USE_POSTGRES:
+                    conn.commit()  # Her DROP'u commit et (PostgreSQL)
+            except Exception:
+                pass
+
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS signals (
                 id           {pk_type},
@@ -6653,8 +6674,8 @@ def db_stats_endpoint():
                COUNT(*) AS total,
                SUM(CASE WHEN outcome='WIN'  THEN 1 ELSE 0 END) AS wins,
                SUM(CASE WHEN outcome='LOSS' THEN 1 ELSE 0 END) AS losses,
-               ROUND(AVG(CASE WHEN outcome='WIN' THEN 100.0 ELSE 0 END),1) AS win_rate,
-               ROUND(SUM(COALESCE(net_pnl_pct,0)),2) AS net_pnl_pct,
+               ROUND(AVG(CASE WHEN outcome='WIN' THEN 100.0 ELSE 0 END)::numeric,1) AS win_rate,
+               ROUND(SUM(COALESCE(net_pnl_pct,0))::numeric,2) AS net_pnl_pct,
                MIN(open_ts) AS first_signal, MAX(open_ts) AS last_signal
         FROM signals WHERE status != 'pending'
         GROUP BY symbol ORDER BY total DESC
