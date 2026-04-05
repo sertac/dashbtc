@@ -6590,15 +6590,21 @@ def market_history():
 @app.route("/debug/status")
 def debug_status():
     """Debug endpoint — background loop durumunu göster."""
+    import sys
     return json.dumps({
         "symbol": SYMBOL,
         "mkt_history_len": len(_mkt_history),
+        "mkt_history_id": id(_mkt_history),
         "pending_signals": len(_pending_signals),
         "closed_signals": len(_closed_signals),
         "mkt_cache": bool(_mkt_cache.get("ts")),
+        "mkt_cache_data": {k: v for k, v in _mkt_cache.items() if k != "ts"},
         "htf_cache": bool(_htf_cache.get("ts")),
         "use_postgres": _USE_POSTGRES,
         "api_failures": dict(_api_failures),
+        "mkt_last_fetch": _mkt_last_fetch,
+        "pid": os.getpid(),
+        "thread": threading.current_thread().name,
     })
 
 @app.route("/history")
