@@ -3973,8 +3973,26 @@ def background_loop():
             }
             with _lock: _state.update(new_state)
         except Exception as e:
-            print(f"[Hata] {e}")
+            print(f"[BG LOOP HATA] {e}", flush=True)
             import traceback; traceback.print_exc()
+            # Hata olsa bile kısmi state güncelle — dashboard boş kalmasın
+            try:
+                with _lock:
+                    _state.update({
+                        "ts": datetime.now().strftime("%H:%M:%S"),
+                        "symbol": SYMBOL,
+                        "price": price if 'price' in dir() else 0,
+                        "htf": _htf_cache,
+                        "mkt": _mkt_cache,
+                        "signals": [],
+                        "candles": [],
+                        "pending": [],
+                        "closed": [],
+                        "stats": calc_win_stats(SYMBOL),
+                        "error": str(e)[:200],
+                    })
+            except Exception as e2:
+                print(f"[BG LOOP FALLBACK HATA] {e2}", flush=True)
         time.sleep(REFRESH_SEC)
 
 
@@ -6643,9 +6661,14 @@ def market_history():
 @app.route("/debug/status")
 def debug_status():
     """Debug endpoint — background loop durumunu göster."""
-    import sys
+    with _lock:
+        state_keys = dict(_state)
     return json.dumps({
         "symbol": SYMBOL,
+        "_state_ts": state_keys.get("ts", "EMPTY"),
+        "_state_price": state_keys.get("price", "EMPTY"),
+        "_state_signals": len(state_keys.get("signals", [])),
+        "_state_candles": len(state_keys.get("candles", [])),
         "mkt_history_len": len(_mkt_history),
         "mkt_history_id": id(_mkt_history),
         "pending_signals": len(_pending_signals),
@@ -6653,6 +6676,7 @@ def debug_status():
         "mkt_cache": bool(_mkt_cache.get("ts")),
         "mkt_cache_data": {k: v for k, v in _mkt_cache.items() if k != "ts"},
         "htf_cache": bool(_htf_cache.get("ts")),
+        "htf_cache_data": {k: v for k, v in _htf_cache.items() if k not in ("ts", "details")},
         "use_postgres": _USE_POSTGRES,
         "api_failures": dict(_api_failures),
         "mkt_last_fetch": _mkt_last_fetch,
