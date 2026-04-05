@@ -995,6 +995,7 @@ _db_writer_thread.start()
 def db_init():
     pk_type = "SERIAL PRIMARY KEY" if _USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
     bool_type = "BOOLEAN" if _USE_POSTGRES else "INTEGER"
+    default_ts = "NOW()" if _USE_POSTGRES else "datetime('now')"
 
     def _fn(conn):
         conn.execute(f"""
