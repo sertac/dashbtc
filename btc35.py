@@ -1575,53 +1575,60 @@ _mkt_history = []  # Son 120 veri (60 dakika = 1 saat, her 30 saniyede bir)
 def _mkt_add_history():
     """Mevcut piyasa verisini history'ye ekle + DB'ye kaydet."""
     global _mkt_history
-    now = datetime.now().strftime("%H:%M")
-    now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    import sys
+    try:
+        now = datetime.now().strftime("%H:%M")
+        now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Son veri ile karşılaştır (aynı veri ekleme)
-    if _mkt_history:
-        last = _mkt_history[-1]
-        curr_ls = _mkt_cache.get("ls_ratio") or 1
-        curr_oi = _mkt_cache.get("oi_change_pct") or 0
-        curr_fr = _mkt_cache.get("funding_rate") or 0
-        curr_taker = _mkt_cache.get("taker_ratio") or 1
+        # Son veri ile karşılaştır (aynı veri ekleme)
+        if _mkt_history:
+            last = _mkt_history[-1]
+            curr_ls = _mkt_cache.get("ls_ratio") or 1
+            curr_oi = _mkt_cache.get("oi_change_pct") or 0
+            curr_fr = _mkt_cache.get("funding_rate") or 0
+            curr_taker = _mkt_cache.get("taker_ratio") or 1
 
-        last_ls = last.get("ls_ratio") or 1
-        last_oi = last.get("oi_change_pct") or 0
-        last_fr = last.get("funding_rate") or 0
-        last_taker = last.get("taker_ratio") or 1
+            last_ls = last.get("ls_ratio") or 1
+            last_oi = last.get("oi_change_pct") or 0
+            last_fr = last.get("funding_rate") or 0
+            last_taker = last.get("taker_ratio") or 1
 
-        # TÜM değerler aynıysa ekleme (veri değişmemiş)
-        if (abs(curr_ls - last_ls) < 0.001 and
-            abs(curr_oi - last_oi) < 0.001 and
-            abs(curr_fr - last_fr) < 0.0000001 and
-            abs(curr_taker - last_taker) < 0.001):
-            return  # Aynı veri, skip
+            # TÜM değerler aynıysa ekleme (veri değişmemiş)
+            if (abs(curr_ls - last_ls) < 0.001 and
+                abs(curr_oi - last_oi) < 0.001 and
+                abs(curr_fr - last_fr) < 0.0000001 and
+                abs(curr_taker - last_taker) < 0.001):
+                return  # Aynı veri, skip
 
-        # Aynı timestamp'e sahip veri varsa güncelle (tekrar ekleme)
-        if last.get("ts") == now:
-            _mkt_history[-1] = {
-                "ts": now,
-                "funding_rate": curr_fr,
-                "oi_change_pct": curr_oi,
-                "ls_ratio": curr_ls,
-                "taker_ratio": curr_taker,
-            }
-            return
+            # Aynı timestamp'e sahip veri varsa güncelle (tekrar ekleme)
+            if last.get("ts") == now:
+                _mkt_history[-1] = {
+                    "ts": now,
+                    "funding_rate": curr_fr,
+                    "oi_change_pct": curr_oi,
+                    "ls_ratio": curr_ls,
+                    "taker_ratio": curr_taker,
+                }
+                return
 
-    history_entry = {
-        "ts": now,
-        "funding_rate": _mkt_cache.get("funding_rate") or 0,
-        "oi_change_pct": _mkt_cache.get("oi_change_pct") or 0,
-        "ls_ratio": _mkt_cache.get("ls_ratio") or 1,
-        "taker_ratio": _mkt_cache.get("taker_ratio") or 1,
-    }
-    _mkt_history.append(history_entry)
-    # Son 120 veriyi tut (60 dakika = 1 saat, her 30 saniyede bir)
-    if len(_mkt_history) > 120:
-        _mkt_history = _mkt_history[-120:]
-    # DB'ye kaydet
-    db_insert_market_history(SYMBOL, {**history_entry, "ts": now_ts, **_mkt_cache})
+        history_entry = {
+            "ts": now,
+            "funding_rate": _mkt_cache.get("funding_rate") or 0,
+            "oi_change_pct": _mkt_cache.get("oi_change_pct") or 0,
+            "ls_ratio": _mkt_cache.get("ls_ratio") or 1,
+            "taker_ratio": _mkt_cache.get("taker_ratio") or 1,
+        }
+        _mkt_history.append(history_entry)
+        print(f"[MKT HIST] Added entry, len={len(_mkt_history)}, id={id(_mkt_history)}", flush=True)
+        # Son 120 veriyi tut (60 dakika = 1 saat, her 30 saniyede bir)
+        if len(_mkt_history) > 120:
+            _mkt_history = _mkt_history[-120:]
+        # DB'ye kaydet
+        db_insert_market_history(SYMBOL, {**history_entry, "ts": now_ts, **_mkt_cache})
+    except Exception as e:
+        print(f"[MKT HIST ERROR] {e}", flush=True)
+        import traceback
+        traceback.print_exc()
 
 # Telegram Bot Helper
 def telegram_send_message(message):
