@@ -4100,6 +4100,10 @@ def background_loop():
                 print(f"[BG LOOP STATE HATA] {e}", flush=True)
                 import traceback
                 traceback.print_exc()
+        except Exception as e:
+            print(f"[BG LOOP ANA HATA] {e}", flush=True)
+            import traceback
+            traceback.print_exc()
         time.sleep(REFRESH_SEC)
 
 
