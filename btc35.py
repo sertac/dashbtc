@@ -3615,6 +3615,16 @@ def background_loop():
         try:
             now=time.time()
 
+            # ── İLK İŞ: Ticker fetch — price'ı hemen güncelle ──
+            try:
+                _ticker_now = _get_exchange().fetch_ticker(SYMBOL)
+                _price_now = float(_ticker_now.get("last", 0))
+                _change24h_now = float(_ticker_now.get("percentage", 0) or 0)
+                with _lock:
+                    _state.update({"price": _price_now, "change24h": round(_change24h_now, 2)})
+            except Exception as e:
+                print(f"[BG TICKER HATA] {e}", flush=True)
+
             # Telegram polling — her 3 saniyede bir
             if now - _telegram_last_poll >= 3:
                 telegram_poll_updates()
