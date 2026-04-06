@@ -869,11 +869,24 @@ REDDIT_SUBS = ["Bitcoin","CryptoCurrency","btc","ethereum","CryptoMarkets"]
 REDDIT_HEADERS = {"User-Agent": "btc-dashboard/1.0", "Accept": "application/json"}
 
 app      = Flask(__name__)
-exchange = ccxt.binance({
-    "options": {"defaultType": "future"},
-    "apiKey": os.environ.get("BINANCE_API_KEY", ""),
-    "secret": os.environ.get("BINANCE_SECRET_KEY", ""),
-})
+
+# ── CCXT exchange — her thread için ayrı instance (thread-safe) ──
+_exchange_local = threading.local()
+
+def _get_exchange():
+    """Thread-local exchange instance — gunicorn thread safety için."""
+    if not hasattr(_exchange_local, 'exchange'):
+        _exchange_local.exchange = ccxt.binance({
+            "options": {"defaultType": "future"},
+            "apiKey": os.environ.get("BINANCE_API_KEY", ""),
+            "secret": os.environ.get("BINANCE_SECRET_KEY", ""),
+            "enableRateLimit": True,
+            "timeout": 15000,
+        })
+    return _exchange_local.exchange
+
+# Global exchange referansı (backward compat)
+exchange = _get_exchange()
 
 # ── Database: PostgreSQL (Render/Neon) veya SQLite fallback ─────
 import queue as _queue_mod
@@ -3886,19 +3899,23 @@ def background_loop():
 
             except Exception as e:
                 print(f"[SMART ALERT HATA] {e}")
-            ticker=exchange.fetch_ticker(SYMBOL); price=float(ticker["last"]); change24h=float(ticker.get("percentage",0) or 0)
-            ob=exchange.fetch_order_book(SYMBOL,OB_DEPTH); df=fetch_ohlcv(); df=calc_indicators(df)
-            # ── OHLCV + candle data + signals ──
+
+            # ── OHLCV + candle data + signals — TAMAMI try/except içinde ──
             df = None
             ticker = None
             price = 0
+            change24h = 0
             bid_walls = []
             ask_walls = []
             signals = []
             candles = []
             predictions = {}
             try:
-                # OHLCV fetch
+                # Ticker + OHLCV + Order Book — hepsi tek try/except'te
+                ticker = exchange.fetch_ticker(SYMBOL)
+                price = float(ticker.get("last", 0))
+                change24h = float(ticker.get("percentage", 0) or 0)
+
                 df = exchange.fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
                 df = pd.DataFrame(df, columns=["ts","open","high","low","close","volume"])
                 df = df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
@@ -3911,17 +3928,12 @@ def background_loop():
                 df["sma_50"] = ta.trend.SMAIndicator(df["close"], 50).sma_indicator()
                 df["sma_200"] = ta.trend.SMAIndicator(df["close"], 200).sma_indicator()
                 df["vol_ratio"] = df["volume"] / df["vol_ma"].replace(0, 1)
+                df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
 
                 _df_cache = df
 
                 # Order book
                 ob = exchange.fetch_order_book(SYMBOL, limit=OB_DEPTH)
-                ticker = exchange.fetch_ticker(SYMBOL)
-                price = ticker["last"]
-
-                # ATR
-                df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
-
                 bid_walls = cluster_walls(ob["bids"], price, TOP_WALLS)
                 ask_walls = cluster_walls(ob["asks"], price, TOP_WALLS)
 
@@ -3943,6 +3955,8 @@ def background_loop():
                     _kalman_price_history.pop(0)
             except Exception as e:
                 print(f"[BG LOOP OHLCV HATA] {e}", flush=True)
+                import traceback
+                traceback.print_exc()
                 import traceback
                 traceback.print_exc()
 
