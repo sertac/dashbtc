@@ -6689,6 +6689,16 @@ def stream():
     def event_stream():
         last_ts=None
         while True:
+            # SSE thread'den direkt price fetch — background loop'a bağımlı değil
+            try:
+                _st = _get_exchange().fetch_ticker(SYMBOL)
+                _sp = float(_st.get("last", 0))
+                _sc = float(_st.get("percentage", 0) or 0)
+                with _lock:
+                    _state.update({"price": _sp, "change24h": round(_sc, 2)})
+            except Exception:
+                pass
+
             with _lock: ts=_state.get("ts"); state=dict(_state)
             # Market history ekle
             state["mkt_history"] = _mkt_history
