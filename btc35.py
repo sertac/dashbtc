@@ -3912,11 +3912,15 @@ def background_loop():
             predictions = {}
             try:
                 # Ticker + OHLCV + Order Book — hepsi tek try/except'te
+                print(f"[BG] Fetching ticker {SYMBOL}...", flush=True)
                 ticker = _get_exchange().fetch_ticker(SYMBOL)
                 price = float(ticker.get("last", 0))
                 change24h = float(ticker.get("percentage", 0) or 0)
+                print(f"[BG] Ticker OK: price={price}", flush=True)
 
+                print(f"[BG] Fetching OHLCV...", flush=True)
                 df = _get_exchange().fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
+                print(f"[BG] OHLCV raw rows: {len(df)}", flush=True)
                 df = pd.DataFrame(df, columns=["ts","open","high","low","close","volume"])
                 df = df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
 
@@ -3929,18 +3933,22 @@ def background_loop():
                 df["sma_200"] = ta.trend.SMAIndicator(df["close"], 200).sma_indicator()
                 df["vol_ratio"] = df["volume"] / df["vol_ma"].replace(0, 1)
                 df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
+                print(f"[BG] Indicators OK, rows={len(df)}", flush=True)
 
                 _df_cache = df
 
                 # Order book
+                print(f"[BG] Fetching order book...", flush=True)
                 ob = _get_exchange().fetch_order_book(SYMBOL, limit=OB_DEPTH)
                 bid_walls = cluster_walls(ob["bids"], price, TOP_WALLS)
                 ask_walls = cluster_walls(ob["asks"], price, TOP_WALLS)
+                print(f"[BG] Order book OK, walls={len(bid_walls)}/{len(ask_walls)}", flush=True)
 
                 # Candles for chart
                 candles_df = df.tail(60)[["open","high","low","close","volume","ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].copy()
                 candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]] = candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].fillna(0)
                 candles = candles_df.round(2).values.tolist()
+                print(f"[BG] Candles OK: {len(candles)}", flush=True)
 
                 # Predictions
                 predictions = calc_predictions(df)
