@@ -6689,14 +6689,16 @@ def stream():
     def event_stream():
         last_ts=None
         while True:
-            # SSE thread'den price fetch (basit, requests ile — ccxt değil)
+            # SSE thread'den price fetch (basit requests — ccxt değil)
             try:
                 import requests as _req
                 _r = _req.get("https://fapi.binance.com/fapi/v1/ticker/price", params={"symbol": SYMBOL.split("/")[0] + "USDT"}, timeout=5)
                 if _r.status_code == 200:
                     _p = float(_r.json().get("price", 0))
+                    _now = datetime.now().strftime("%H:%M:%S")
                     with _lock:
                         _state["price"] = _p
+                        _state["ts"] = _now  # ts güncelle ki SSE mesaj göndersin!
             except Exception:
                 pass
 
