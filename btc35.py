@@ -1844,7 +1844,7 @@ _adf_cache = {"is_stationary":False, "p_value":0.5, "adf_stat":0, "regime":"TREN
 _adf_last_fetch = -999
 
 def fetch_ohlcv():
-    raw = exchange.fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
+    raw = _get_exchange().fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
     df  = pd.DataFrame(raw, columns=["ts","open","high","low","close","volume"])
     return df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
 
@@ -2038,7 +2038,7 @@ def calc_predictions(df):
     }
 
 def fetch_htf_ohlcv():
-    raw = exchange.fetch_ohlcv(SYMBOL, HTF_TIMEFRAME, limit=HTF_LIMIT)
+    raw = _get_exchange().fetch_ohlcv(SYMBOL, HTF_TIMEFRAME, limit=HTF_LIMIT)
     df  = pd.DataFrame(raw, columns=["ts","open","high","low","close","volume"])
     return df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
 
@@ -2204,7 +2204,7 @@ def fetch_liquidations():
     try:
         # Kullanıcının kendi likidasyonları (varsa)
         params = {'symbol': SYMBOL.replace("/", ""), 'limit': 100}
-        liqs = exchange.fapiPrivateGetForceOrders(params)
+        liqs = _get_exchange().fapiPrivateGetForceOrders(params)
 
         now = time.time()
         long_liq = 0.0
@@ -2564,7 +2564,7 @@ def fetch_eth_staking():
         
         # Network security
         try:
-            eth_price = float(exchange.fetch_ticker("ETH/USDT")["last"])
+            eth_price = float(_get_exchange().fetch_ticker("ETH/USDT")["last"])
         except:
             eth_price = 3500
         
@@ -3912,11 +3912,11 @@ def background_loop():
             predictions = {}
             try:
                 # Ticker + OHLCV + Order Book — hepsi tek try/except'te
-                ticker = exchange.fetch_ticker(SYMBOL)
+                ticker = _get_exchange().fetch_ticker(SYMBOL)
                 price = float(ticker.get("last", 0))
                 change24h = float(ticker.get("percentage", 0) or 0)
 
-                df = exchange.fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
+                df = _get_exchange().fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
                 df = pd.DataFrame(df, columns=["ts","open","high","low","close","volume"])
                 df = df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
 
@@ -3933,7 +3933,7 @@ def background_loop():
                 _df_cache = df
 
                 # Order book
-                ob = exchange.fetch_order_book(SYMBOL, limit=OB_DEPTH)
+                ob = _get_exchange().fetch_order_book(SYMBOL, limit=OB_DEPTH)
                 bid_walls = cluster_walls(ob["bids"], price, TOP_WALLS)
                 ask_walls = cluster_walls(ob["asks"], price, TOP_WALLS)
 
