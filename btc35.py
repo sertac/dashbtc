@@ -6791,12 +6791,21 @@ def debug_status():
     """Debug endpoint — background loop durumunu göster."""
     with _lock:
         state_keys = dict(_state)
+    # Test exchange directly
+    exchange_test = {}
+    try:
+        ex = _get_exchange()
+        t = ex.fetch_ticker(SYMBOL)
+        exchange_test = {"ok": True, "price": t.get("last"), "error": None}
+    except Exception as e:
+        exchange_test = {"ok": False, "price": None, "error": str(e)[:200]}
     return json.dumps({
         "symbol": SYMBOL,
         "_state_ts": state_keys.get("ts", "EMPTY"),
         "_state_price": state_keys.get("price", "EMPTY"),
         "_state_signals": len(state_keys.get("signals", [])),
         "_state_candles": len(state_keys.get("candles", [])),
+        "exchange_test": exchange_test,
         "mkt_history_len": len(_mkt_history),
         "mkt_history_id": id(_mkt_history),
         "pending_signals": len(_pending_signals),
