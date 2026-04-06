@@ -6689,13 +6689,14 @@ def stream():
     def event_stream():
         last_ts=None
         while True:
-            # SSE thread'den direkt price fetch — background loop'a bağımlı değil
+            # SSE thread'den price fetch (basit, requests ile — ccxt değil)
             try:
-                _st = _get_exchange().fetch_ticker(SYMBOL)
-                _sp = float(_st.get("last", 0))
-                _sc = float(_st.get("percentage", 0) or 0)
-                with _lock:
-                    _state.update({"price": _sp, "change24h": round(_sc, 2)})
+                import requests as _req
+                _r = _req.get("https://fapi.binance.com/fapi/v1/ticker/price", params={"symbol": SYMBOL.split("/")[0] + "USDT"}, timeout=5)
+                if _r.status_code == 200:
+                    _p = float(_r.json().get("price", 0))
+                    with _lock:
+                        _state["price"] = _p
             except Exception:
                 pass
 
