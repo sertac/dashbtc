@@ -3914,12 +3914,18 @@ def background_loop():
             # 1. Ticker fetch (en basit)
             try:
                 print(f"[BG-1] Fetching ticker {SYMBOL}...", flush=True)
-                ticker = _get_exchange().fetch_ticker(SYMBOL)
+                ex = _get_exchange()
+                ticker = ex.fetch_ticker(SYMBOL)
                 price = float(ticker.get("last", 0))
                 change24h = float(ticker.get("percentage", 0) or 0)
                 print(f"[BG-1] Ticker OK: price={price}", flush=True)
+                # Update partial state immediately
+                with _lock:
+                    _state.update({"price": price, "change24h": round(change24h, 2)})
             except Exception as e:
                 print(f"[BG-1] Ticker HATA: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
 
             # 2. OHLCV + indicators
             try:
