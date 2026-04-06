@@ -3900,7 +3900,7 @@ def background_loop():
             except Exception as e:
                 print(f"[SMART ALERT HATA] {e}")
 
-            # ── OHLCV + candle data + signals — TAMAMI try/except içinde ──
+            # ── OHLCV + candle data + signals — Kademeli try/except ──
             df = None
             ticker = None
             price = 0
@@ -3910,59 +3910,68 @@ def background_loop():
             signals = []
             candles = []
             predictions = {}
+
+            # 1. Ticker fetch (en basit)
             try:
-                # Ticker + OHLCV + Order Book — hepsi tek try/except'te
-                print(f"[BG] Fetching ticker {SYMBOL}...", flush=True)
+                print(f"[BG-1] Fetching ticker {SYMBOL}...", flush=True)
                 ticker = _get_exchange().fetch_ticker(SYMBOL)
                 price = float(ticker.get("last", 0))
                 change24h = float(ticker.get("percentage", 0) or 0)
-                print(f"[BG] Ticker OK: price={price}", flush=True)
-
-                print(f"[BG] Fetching OHLCV...", flush=True)
-                df = _get_exchange().fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
-                print(f"[BG] OHLCV raw rows: {len(df)}", flush=True)
-                df = pd.DataFrame(df, columns=["ts","open","high","low","close","volume"])
-                df = df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
-
-                # Indicators
-                df["ema_fast"] = ta.trend.EMAIndicator(df["close"], EMA_FAST).ema_indicator()
-                df["ema_slow"] = ta.trend.EMAIndicator(df["close"], EMA_SLOW).ema_indicator()
-                df["rsi"] = ta.momentum.RSIIndicator(df["close"], RSI_PERIOD).rsi()
-                df["vol_ma"] = ta.trend.SMAIndicator(df["volume"], 20).sma_indicator()
-                df["sma_50"] = ta.trend.SMAIndicator(df["close"], 50).sma_indicator()
-                df["sma_200"] = ta.trend.SMAIndicator(df["close"], 200).sma_indicator()
-                df["vol_ratio"] = df["volume"] / df["vol_ma"].replace(0, 1)
-                df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
-                print(f"[BG] Indicators OK, rows={len(df)}", flush=True)
-
-                _df_cache = df
-
-                # Order book
-                print(f"[BG] Fetching order book...", flush=True)
-                ob = _get_exchange().fetch_order_book(SYMBOL, limit=OB_DEPTH)
-                bid_walls = cluster_walls(ob["bids"], price, TOP_WALLS)
-                ask_walls = cluster_walls(ob["asks"], price, TOP_WALLS)
-                print(f"[BG] Order book OK, walls={len(bid_walls)}/{len(ask_walls)}", flush=True)
-
-                # Candles for chart
-                candles_df = df.tail(60)[["open","high","low","close","volume","ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].copy()
-                candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]] = candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].fillna(0)
-                candles = candles_df.round(2).values.tolist()
-                print(f"[BG] Candles OK: {len(candles)}", flush=True)
-
-                # Predictions
-                predictions = calc_predictions(df)
-
-                # Kalman history
-                global _kalman_price_history
-                if '_kalman_price_history' not in globals():
-                    _kalman_price_history = []
-                current_kalman = _kalman_price.x if _kalman_price.x > 0 else price
-                _kalman_price_history.append(current_kalman)
-                if len(_kalman_price_history) > 60:
-                    _kalman_price_history.pop(0)
+                print(f"[BG-1] Ticker OK: price={price}", flush=True)
             except Exception as e:
-                print(f"[BG LOOP OHLCV HATA] {e}", flush=True)
+                print(f"[BG-1] Ticker HATA: {e}", flush=True)
+
+            # 2. OHLCV + indicators
+            try:
+                if price <= 0:
+                    print(f"[BG-2] Skipping OHLCV (no price)", flush=True)
+                else:
+                    print(f"[BG-2] Fetching OHLCV...", flush=True)
+                    raw = _get_exchange().fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
+                    print(f"[BG-2] OHLCV raw rows: {len(raw)}", flush=True)
+                    df = pd.DataFrame(raw, columns=["ts","open","high","low","close","volume"])
+                    df = df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
+                    df["ema_fast"] = ta.trend.EMAIndicator(df["close"], EMA_FAST).ema_indicator()
+                    df["ema_slow"] = ta.trend.EMAIndicator(df["close"], EMA_SLOW).ema_indicator()
+                    df["rsi"] = ta.momentum.RSIIndicator(df["close"], RSI_PERIOD).rsi()
+                    df["vol_ma"] = ta.trend.SMAIndicator(df["volume"], 20).sma_indicator()
+                    df["sma_50"] = ta.trend.SMAIndicator(df["close"], 50).sma_indicator()
+                    df["sma_200"] = ta.trend.SMAIndicator(df["close"], 200).sma_indicator()
+                    df["vol_ratio"] = df["volume"] / df["vol_ma"].replace(0, 1)
+                    df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
+                    _df_cache = df
+                    print(f"[BG-2] Indicators OK, rows={len(df)}", flush=True)
+            except Exception as e:
+                print(f"[BG-2] OHLCV HATA: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+
+            # 3. Order book + candles
+            try:
+                if df is None or price <= 0:
+                    print(f"[BG-3] Skipping order book (no df/price)", flush=True)
+                else:
+                    print(f"[BG-3] Fetching order book...", flush=True)
+                    ob = _get_exchange().fetch_order_book(SYMBOL, limit=OB_DEPTH)
+                    bid_walls = cluster_walls(ob["bids"], price, TOP_WALLS)
+                    ask_walls = cluster_walls(ob["asks"], price, TOP_WALLS)
+                    print(f"[BG-3] Order book OK", flush=True)
+
+                    candles_df = df.tail(60)[["open","high","low","close","volume","ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].copy()
+                    candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]] = candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].fillna(0)
+                    candles = candles_df.round(2).values.tolist()
+                    print(f"[BG-3] Candles OK: {len(candles)}", flush=True)
+
+                    predictions = calc_predictions(df)
+                    global _kalman_price_history
+                    if '_kalman_price_history' not in globals():
+                        _kalman_price_history = []
+                    current_kalman = _kalman_price.x if _kalman_price.x > 0 else price
+                    _kalman_price_history.append(current_kalman)
+                    if len(_kalman_price_history) > 60:
+                        _kalman_price_history.pop(0)
+            except Exception as e:
+                print(f"[BG-3] Candles HATA: {e}", flush=True)
                 import traceback
                 traceback.print_exc()
                 import traceback
