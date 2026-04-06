@@ -3627,7 +3627,7 @@ def background_loop():
                         print(f"[MKT Hata] {e}")
                         _api_record_failure("market_data")
 
-            # ── Kısmi state güncelle — dashboard boş kalmasın ──
+            # ── Kısmi state güncelle — dashboard boş kalmasın — HER DÖNGÜDE ÇALIŞIR ──
             try:
                 with _lock:
                     _state.update({
@@ -3660,7 +3660,7 @@ def background_loop():
                         "closed": [],
                         "stats": {},
                         "rl_status": {},
-                        "mkt_history": [],
+                        "mkt_history": list(_mkt_history),
                         "spread": {"spread_pct": 0, "state": "OK", "ts": "—"},
                         "liquidations": {"long_liq_1h": "—", "short_liq_1h": "—", "liq_ratio": 1.0, "liq_trend": "nötr", "big_liq": False, "ts": ""},
                         "mark_index": {"mark_price": 0, "index_price": 0, "basis_pct": 0, "basis_trend": "nötr", "divergence": 0, "ts": ""},
@@ -3888,163 +3888,204 @@ def background_loop():
                 print(f"[SMART ALERT HATA] {e}")
             ticker=exchange.fetch_ticker(SYMBOL); price=float(ticker["last"]); change24h=float(ticker.get("percentage",0) or 0)
             ob=exchange.fetch_order_book(SYMBOL,OB_DEPTH); df=fetch_ohlcv(); df=calc_indicators(df)
-            _df_cache = df  # RL reward hesaplaması için global cache
-            bid_walls=cluster_walls(ob["bids"],price,TOP_WALLS); ask_walls=cluster_walls(ob["asks"],price,TOP_WALLS)
-            signals=generate_signals(price,bid_walls,ask_walls,df,ticker=ticker); c=df.iloc[-1]
-            candles_df=df.tail(60)[["open","high","low","close","volume","ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].copy()
-            candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]]=candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].fillna(0)
-            candles=candles_df.round(2).values.tolist()
-            
-            # Tahminleri hesapla
-            predictions = calc_predictions(df)
-            
-            # Kalman geçmişini kaydet (grafik için - son 60 mum)
-            global _kalman_price_history
-            if '_kalman_price_history' not in globals():
-                _kalman_price_history = []
-            # Son Kalman değerini ekle
-            current_kalman = _kalman_price.x if _kalman_price.x > 0 else price
-            _kalman_price_history.append(current_kalman)
-            # Son 60 değeri tut
-            if len(_kalman_price_history) > 60:
-                _kalman_price_history.pop(0)
-            # ── HTF Reversal Flag: Bekleyen sinyalleri işaretle (hemen kapatma) ──
-            for sig in _pending_signals:
-                if sig.get("symbol") != SYMBOL:
-                    continue
-                htf_reversed = (
-                    (sig["dir"] == "LONG"  and _htf_cache["trend"] == "BEAR") or
-                    (sig["dir"] == "SHORT" and _htf_cache["trend"] == "BULL")
-                )
-                sig["_htf_reversed"] = htf_reversed  # Flag olarak işaretle
-
-            for sig in signals:
-                if sig["htf_blocked"]:
-                    continue  # engellenen sinyaller pending'e girmez
-
-                open_for_symbol = [p for p in _pending_signals if p.get("symbol") == SYMBOL]
-                same_dir_open   = [p for p in open_for_symbol if p["dir"] == sig["dir"]]
-                opp_dir_open    = [p for p in open_for_symbol if p["dir"] != sig["dir"]]
-
-                # Aynı yönde zaten açık sinyal varsa atla
-                if same_dir_open:
-                    continue
-
-                # Karşı yönde açık sinyal varsa → koşullu kapat
-                if opp_dir_open:
-                    existing  = opp_dir_open[0]
-                    is_long   = existing["dir"] == "LONG"
-                    rt        = 2 * COMMISSION
-                    raw_pct   = (price - existing["entry"]) / existing["entry"] * (1 if is_long else -1)
-                    net_pct   = round((raw_pct - rt) * 100, 2)
-                    net_usd   = round(existing["entry"] * (raw_pct - rt), 2)
-                    outcome   = "WIN" if net_pct > 0 else "LOSS"
-
-                    # Kapatma kararı kriterleri (kademeli):
-                    # 1. HTF trend tersine döndüyse + yeni sinyal mevcut kadar güçlü → kapat
-                    # 2. Yeni sinyal skoru > mevcut + 1 → daha güçlü sinyal, geç
-                    # 3. Piyasa verisi sert karşı blok oluşturduysa → kapat
-                    htf_reversed = (
-                        (existing["dir"] == "LONG"  and _htf_cache["trend"] == "BEAR") or
-                        (existing["dir"] == "SHORT" and _htf_cache["trend"] == "BULL")
-                    )
-                    stronger_signal = sig["score"] > existing.get("score", 0) + 1
-                    mkt_against     = sig["mkt_score"] >= 2  # piyasa yeni yönü destekliyor
-
-                    # HTF tersine döndüyse daha düşük eşik yeterli (yeni sinyal mevcut kadar güçlü olsun)
-                    if htf_reversed:
-                        should_reverse = sig["score"] >= existing.get("score", 0)
-                    else:
-                        should_reverse = stronger_signal and mkt_against
-
-                    if not should_reverse:
-                        # Şartlar net değil — mevcut sinyali koru
-                        continue
-
-                    reason = "HTF ters döndü" if htf_reversed else f"güçlü karşı sinyal (★{sig['score']})"
-                    now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    _close_signal(existing, outcome, net_pct, net_usd,
-                                  now_ts, exit_price=price,
-                                  close_reason=f"↩ Reverse — {reason}")
-                    _pending_signals = [p for p in _pending_signals
-                                       if not (p.get("symbol")==SYMBOL and p["dir"]==existing["dir"])]
-                    print(f"[REVERSE] {existing['dir']} @ {existing['entry']} → {sig['dir']} | {reason} | P&L:{net_pct}%")
-
-                # Yeni sinyali ekle — ilk 5 döngü kontrol edilmesin (75 saniye = 15 mum)
-                new_sig = {**sig, "ts": datetime.now().strftime("%H:%M:%S"), "symbol": SYMBOL, "_wait_count": 0}
-                try:
-                    db_id = db_insert_signal(new_sig)
-                    new_sig["_db_id"] = db_id
-                except Exception as e:
-                    print(f"[DB HATA] insert: {e}")
-                    new_sig["_db_id"] = None
-                _pending_signals.append(new_sig)
-                print(f"[YENİ SİNYAL] {sig['dir']} @ {sig['entry']} ★{sig['score']} DB:{new_sig['_db_id']} — wait_count=0")
-                
-                # Telegram bildirim
-                telegram_signal_opened(new_sig)
-            # Önce pending sinyalleri kontrol et (kapanan var mı?)
-            check_pending_signals(df)
-            
-            # Stats'i DB'den taze hesapla — check_pending_signals'tan SONRA
-            stats=calc_win_stats(SYMBOL)
-
-            new_state={
-                "ts":datetime.now().strftime("%H:%M:%S"),"symbol":SYMBOL,"price":price,
-                "change24h":round(change24h,2),"rsi":round(float(c["rsi"]),1),
-                "ema_fast":round(float(c["ema_fast"]),2),"ema_slow":round(float(c["ema_slow"]),2),
-                "vol_ratio":round(float(c["volume"]/c["vol_ma"]) if c["vol_ma"]>0 else 0,2),
-                "atr_pct":round(float(c["atr_pct"]),3) if "atr_pct" in c and not pd.isna(c["atr_pct"]) else 0,  # ATR %
-                # df gönderilmiyor — JSON serialize edilemez, sadece RL için kullanılıyor
-                "bid_walls":[{"price":round(p,2),"vol":round(v,2)} for p,v in bid_walls],
-                "ask_walls":[{"price":round(p,2),"vol":round(v,2)} for p,v in ask_walls],
-                "signals":signals,"candles":candles,"htf":_htf_cache,"mkt":_mkt_cache,
-                "news":_news_cache[:25],"tweets":_tweet_cache[:20],"tweet_kw":_tweet_keywords,
-                "flash_news": _FLASH_NEWS_CACHE,  # Kayan yazı için
-                "eth_staking":_eth_staking_cache if SYMBOL=="ETH/USDT" else None,
-                "eth_onchain":_eth_onchain_cache,  # Her zaman gönder
-                "eth_onchain_history": db_load_eth_onchain(SYMBOL, limit=60),  # Grafik için
-                "eth_onchain_trend": db_get_eth_onchain_trend(SYMBOL),  # Trend analizi
-                "predictions": predictions,
-                "kalman_history": _kalman_price_history[-60:] if '_kalman_price_history' in globals() else [],
-                "pending":[{k:v for k,v in s.items() if k not in ("checks","entry_candle_idx","waited_count","_duration_override","_db_id")}
-                           for s in _pending_signals[-10:] if s.get("symbol")==SYMBOL],
-                # Closed sinyaller — sadece yeni kapanış varsa DB'den yükle
-                "closed": _closed_signals[-20:] if _closed_signals else db_load_closed(symbol=SYMBOL, limit=20),
-                "stats":stats,
-            }
-            with _lock: _state.update(new_state)
-        except Exception as e:
-            print(f"[BG LOOP HATA] {e}", flush=True)
-            import traceback; traceback.print_exc()
-            # Hata olsa bile kısmi state güncelle — dashboard boş kalmasın
+            # ── OHLCV + candle data + signals ──
+            df = None
+            ticker = None
+            price = 0
+            bid_walls = []
+            ask_walls = []
+            signals = []
+            candles = []
+            predictions = {}
             try:
-                partial = {
+                # OHLCV fetch
+                df = exchange.fetch_ohlcv(SYMBOL, TIMEFRAME, limit=CANDLE_LIMIT)
+                df = pd.DataFrame(df, columns=["ts","open","high","low","close","volume"])
+                df = df.astype({"open":float,"high":float,"low":float,"close":float,"volume":float})
+
+                # Indicators
+                df["ema_fast"] = ta.trend.EMAIndicator(df["close"], EMA_FAST).ema_indicator()
+                df["ema_slow"] = ta.trend.EMAIndicator(df["close"], EMA_SLOW).ema_indicator()
+                df["rsi"] = ta.momentum.RSIIndicator(df["close"], RSI_PERIOD).rsi()
+                df["vol_ma"] = ta.trend.SMAIndicator(df["volume"], 20).sma_indicator()
+                df["sma_50"] = ta.trend.SMAIndicator(df["close"], 50).sma_indicator()
+                df["sma_200"] = ta.trend.SMAIndicator(df["close"], 200).sma_indicator()
+                df["vol_ratio"] = df["volume"] / df["vol_ma"].replace(0, 1)
+
+                _df_cache = df
+
+                # Order book
+                ob = exchange.fetch_order_book(SYMBOL, limit=OB_DEPTH)
+                ticker = exchange.fetch_ticker(SYMBOL)
+                price = ticker["last"]
+
+                # ATR
+                df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
+
+                bid_walls = cluster_walls(ob["bids"], price, TOP_WALLS)
+                ask_walls = cluster_walls(ob["asks"], price, TOP_WALLS)
+
+                # Candles for chart
+                candles_df = df.tail(60)[["open","high","low","close","volume","ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].copy()
+                candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]] = candles_df[["ema_fast","ema_slow","rsi","vol_ma","sma_50","sma_200"]].fillna(0)
+                candles = candles_df.round(2).values.tolist()
+
+                # Predictions
+                predictions = calc_predictions(df)
+
+                # Kalman history
+                global _kalman_price_history
+                if '_kalman_price_history' not in globals():
+                    _kalman_price_history = []
+                current_kalman = _kalman_price.x if _kalman_price.x > 0 else price
+                _kalman_price_history.append(current_kalman)
+                if len(_kalman_price_history) > 60:
+                    _kalman_price_history.pop(0)
+            except Exception as e:
+                print(f"[BG LOOP OHLCV HATA] {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+
+            # ── Signal generation — ayrı try/except ──
+            try:
+                if df is not None and price > 0:
+                    signals = generate_signals(price, bid_walls, ask_walls, df, ticker=ticker)
+
+                    # HTF Reversal Flag
+                    for sig in _pending_signals:
+                        if sig.get("symbol") != SYMBOL:
+                            continue
+                        htf_reversed = (
+                            (sig["dir"] == "LONG" and _htf_cache["trend"] == "BEAR") or
+                            (sig["dir"] == "SHORT" and _htf_cache["trend"] == "BULL")
+                        )
+                        sig["_htf_reversed"] = htf_reversed
+
+                    for sig in signals:
+                        if sig["htf_blocked"]:
+                            continue
+                        open_for_symbol = [p for p in _pending_signals if p.get("symbol") == SYMBOL]
+                        same_dir_open = [p for p in open_for_symbol if p["dir"] == sig["dir"]]
+                        opp_dir_open = [p for p in open_for_symbol if p["dir"] != sig["dir"]]
+                        if same_dir_open:
+                            continue
+                        if opp_dir_open:
+                            existing = opp_dir_open[0]
+                            is_long = existing["dir"] == "LONG"
+                            rt = 2 * COMMISSION
+                            raw_pct = (price - existing["entry"]) / existing["entry"] * (1 if is_long else -1)
+                            net_pct = round((raw_pct - rt) * 100, 2)
+                            net_usd = round(existing["entry"] * (raw_pct - rt), 2)
+                            outcome = "WIN" if net_pct > 0 else "LOSS"
+                            htf_reversed = (
+                                (existing["dir"] == "LONG" and _htf_cache["trend"] == "BEAR") or
+                                (existing["dir"] == "SHORT" and _htf_cache["trend"] == "BULL")
+                            )
+                            stronger_signal = sig["score"] > existing.get("score", 0) + 1
+                            mkt_against = sig["mkt_score"] >= 2
+                            if htf_reversed:
+                                should_reverse = sig["score"] >= existing.get("score", 0)
+                            else:
+                                should_reverse = stronger_signal and mkt_against
+                            if should_reverse:
+                                reason = "HTF ters döndü" if htf_reversed else f"güçlü karşı sinyal"
+                                now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                _close_signal(existing, outcome, net_pct, net_usd, now_ts, exit_price=price, close_reason=f"↩ Reverse — {reason}")
+                                _pending_signals = [p for p in _pending_signals if not (p.get("symbol")==SYMBOL and p["dir"]==existing["dir"])]
+                                continue
+                        new_sig = {**sig, "ts": datetime.now().strftime("%H:%M:%S"), "symbol": SYMBOL, "_wait_count": 0}
+                        try:
+                            db_id = db_insert_signal(new_sig)
+                            new_sig["_db_id"] = db_id
+                        except Exception as e:
+                            print(f"[DB HATA] insert: {e}")
+                            new_sig["_db_id"] = None
+                        _pending_signals.append(new_sig)
+                        telegram_signal_opened(new_sig)
+            except Exception as e:
+                print(f"[BG LOOP SİNYAL HATA] {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+
+            # Pending check
+            try:
+                if df is not None:
+                    check_pending_signals(df)
+            except Exception as e:
+                print(f"[BG LOOP CHECK HATA] {e}", flush=True)
+
+            # Stats
+            try:
+                stats = calc_win_stats(SYMBOL)
+            except Exception as e:
+                print(f"[BG LOOP STATS HATA] {e}", flush=True)
+                stats = {}
+
+            # ── Full state update — HER ZAMAN çalışır, crash-proof ──
+            try:
+                c = df.iloc[-1] if df is not None and len(df) > 0 else None
+                new_state = {
                     "ts": datetime.now().strftime("%H:%M:%S"),
                     "symbol": SYMBOL,
+                    "price": price if price > 0 else 0,
+                    "change24h": round(change24h, 2) if 'change24h' in dir() else 0,
+                    "rsi": round(float(c["rsi"]), 1) if c is not None and "rsi" in c else 0,
+                    "ema_fast": round(float(c["ema_fast"]), 2) if c is not None and "ema_fast" in c else 0,
+                    "ema_slow": round(float(c["ema_slow"]), 2) if c is not None and "ema_slow" in c else 0,
+                    "vol_ratio": round(float(c["volume"] / c["vol_ma"]), 2) if c is not None and c.get("vol_ma", 0) > 0 else 0,
+                    "atr_pct": round(float(c["atr_pct"]), 3) if c is not None and "atr_pct" in c and not pd.isna(c["atr_pct"]) else 0,
+                    "bid_walls": [{"price": round(p, 2), "vol": round(v, 2)} for p, v in bid_walls],
+                    "ask_walls": [{"price": round(p, 2), "vol": round(v, 2)} for p, v in ask_walls],
+                    "signals": signals,
+                    "candles": candles,
                     "htf": dict(_htf_cache) if _htf_cache else {},
                     "mkt": dict(_mkt_cache) if _mkt_cache else {},
-                    "signals": [],
-                    "candles": [],
-                    "pending": [],
-                    "closed": [],
-                    "stats": calc_win_stats(SYMBOL),
                     "news": _news_cache[:25] if '_news_cache' in dir() else [],
                     "tweets": _tweet_cache[:20] if '_tweet_cache' in dir() else [],
+                    "tweet_kw": _tweet_keywords if '_tweet_keywords' in dir() else [],
                     "flash_news": _FLASH_NEWS_CACHE if '_FLASH_NEWS_CACHE' in dir() else [],
                     "eth_staking": dict(_eth_staking_cache) if '_eth_staking_cache' in dir() and _eth_staking_cache else None,
                     "eth_onchain": dict(_eth_onchain_cache) if '_eth_onchain_cache' in dir() and _eth_onchain_cache else None,
-                    "error": str(e)[:300],
+                    "eth_onchain_history": db_load_eth_onchain(SYMBOL, limit=60),
+                    "eth_onchain_trend": db_get_eth_onchain_trend(SYMBOL),
+                    "predictions": predictions,
+                    "kalman_history": _kalman_price_history[-60:] if '_kalman_price_history' in globals() else [],
+                    "pending": [{k: v for k, v in s.items() if k not in ("checks", "entry_candle_idx", "waited_count", "_duration_override", "_db_id")}
+                                for s in _pending_signals[-10:] if s.get("symbol") == SYMBOL],
+                    "closed": _closed_signals[-20:] if _closed_signals else db_load_closed(symbol=SYMBOL, limit=20),
+                    "stats": stats,
+                    "mkt_history": list(_mkt_history),
+                    "spread": dict(_spread_cache),
+                    "liquidations": dict(_liq_cache),
+                    "mark_index": dict(_mark_cache),
+                    "funding_trend": dict(_funding_trend_cache),
+                    "rl_status": {
+                        "ls_long": _rl_thresholds.get("ls_crowd_long", LS_CROWD_LONG),
+                        "ls_short": _rl_thresholds.get("ls_crowd_short", LS_CROWD_SHORT),
+                        "taker": _rl_thresholds.get("taker_strong", TAKER_STRONG),
+                        "min_score": _rl_thresholds.get("min_score", 40),
+                        "tp_pct": _rl_thresholds.get("tp_pct", 0.02),
+                        "sl_pct": _rl_thresholds.get("sl_pct", 0.01),
+                        "tp_effective": TP_PCT - TP_BUFFER,
+                        "sl_effective": SL_PCT + SL_BUFFER,
+                        "rr_ratio": _rl_thresholds.get("rr_ratio", 2.0),
+                        "epsilon": _rl_config.get("epsilon", 0.2),
+                        "q_states": len(_rl_q_table),
+                        "total_reward": _rl_stats.get("total_reward", 0),
+                        "wins": _rl_stats.get("wins", 0),
+                        "losses": _rl_stats.get("losses", 0),
+                        "initialized": _rl_initialized,
+                        "signals_closed": _rl_stats.get("signals_closed", 0),
+                        "threshold_history": _rl_threshold_history,
+                    },
                 }
-                # price değişkeni varsa ekle
-                try:
-                    partial["price"] = price
-                except NameError:
-                    partial["price"] = 0
                 with _lock:
-                    _state.update(partial)
-            except Exception as e2:
-                print(f"[BG LOOP FALLBACK HATA] {e2}", flush=True)
+                    _state.update(new_state)
+                print(f"[STATE UPDATE] OK — price={price}, candles={len(candles)}, signals={len(signals)}", flush=True)
+            except Exception as e:
+                print(f"[BG LOOP STATE HATA] {e}", flush=True)
+                import traceback
+                traceback.print_exc()
         time.sleep(REFRESH_SEC)
 
 
