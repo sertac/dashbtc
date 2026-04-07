@@ -4159,6 +4159,18 @@ def background_loop():
             # ── Full state update — HER ZAMAN çalışır, crash-proof ──
             try:
                 c = df.iloc[-1] if df is not None and len(df) > 0 else None
+
+                # DB çağrıları ayrı try/except — neon sleep sorununu engeller
+                try:
+                    eth_onchain_hist = db_load_eth_onchain(SYMBOL, limit=60)
+                except: eth_onchain_hist = []
+                try:
+                    eth_onchain_trend = db_get_eth_onchain_trend(SYMBOL)
+                except: eth_onchain_trend = {}
+                try:
+                    closed_from_db = _closed_signals[-20:] if _closed_signals else db_load_closed(symbol=SYMBOL, limit=20)
+                except: closed_from_db = []
+
                 new_state = {
                     "ts": datetime.now().strftime("%H:%M:%S"),
                     "symbol": SYMBOL,
@@ -4181,13 +4193,13 @@ def background_loop():
                     "flash_news": _FLASH_NEWS_CACHE if '_FLASH_NEWS_CACHE' in dir() else [],
                     "eth_staking": dict(_eth_staking_cache) if '_eth_staking_cache' in dir() and _eth_staking_cache else None,
                     "eth_onchain": dict(_eth_onchain_cache) if '_eth_onchain_cache' in dir() and _eth_onchain_cache else None,
-                    "eth_onchain_history": db_load_eth_onchain(SYMBOL, limit=60),
-                    "eth_onchain_trend": db_get_eth_onchain_trend(SYMBOL),
+                    "eth_onchain_history": eth_onchain_hist,
+                    "eth_onchain_trend": eth_onchain_trend,
                     "predictions": predictions,
                     "kalman_history": _kalman_price_history[-60:] if '_kalman_price_history' in globals() else [],
                     "pending": [{k: v for k, v in s.items() if k not in ("checks", "entry_candle_idx", "waited_count", "_duration_override", "_db_id")}
                                 for s in _pending_signals[-10:] if s.get("symbol") == SYMBOL],
-                    "closed": _closed_signals[-20:] if _closed_signals else db_load_closed(symbol=SYMBOL, limit=20),
+                    "closed": closed_from_db,
                     "stats": stats,
                     "mkt_history": list(_mkt_history),
                     "spread": dict(_spread_cache),
