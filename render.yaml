@@ -2,11 +2,11 @@ services:
   - type: web
     name: btc-signal-bot
     env: python
-    region: frankfurt  # Avrupa'ya en yakın
+    region: frankfurt
     plan: free
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --keep-alive 5
+    startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --keep-alive 5 -c gunicorn.conf.py
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
