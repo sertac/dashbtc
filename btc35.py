@@ -894,8 +894,34 @@ def _get_exchange():
         })
     return _exchange_local.exchange
 
-# Global exchange referansı (backward compat)
-exchange = _get_exchange()
+# Global exchange referansı (backward compat) — lazy init, import-time crash koruması
+def _get_exchange_global():
+    global _exchange_global
+    if not hasattr(_exchange_global, 'exc'):
+        try:
+            return _get_exchange()
+        except Exception as e:
+            print(f"[EXCHANGE] Init deferred: {e}", flush=True)
+            _exchange_global.exc = e
+            return None
+    return None
+
+class _LazyExchange:
+    def fetch_ticker(self, *a, **kw):
+        ex = _get_exchange_global()
+        return ex.fetch_ticker(*a, **kw) if ex else None
+    def fetch_ohlcv(self, *a, **kw):
+        ex = _get_exchange_global()
+        return ex.fetch_ohlcv(*a, **kw) if ex else []
+    def fetch_order_book(self, *a, **kw):
+        ex = _get_exchange_global()
+        return ex.fetch_order_book(*a, **kw) if ex else {"bids":[],"asks":[]}
+    def __getattr__(self, name):
+        ex = _get_exchange_global()
+        return getattr(ex, name) if ex else None
+
+_exchange_global = threading.local()
+exchange = _LazyExchange()
 
 # ── Database: PostgreSQL (Render/Neon) veya SQLite fallback ─────
 import queue as _queue_mod
