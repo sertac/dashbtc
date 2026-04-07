@@ -3955,6 +3955,12 @@ def background_loop():
                     df["sma_200"] = ta.trend.SMAIndicator(df["close"], 200).sma_indicator()
                     df["vol_ratio"] = df["volume"] / df["vol_ma"].replace(0, 1)
                     df["atr_pct"] = (ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], 14).average_true_range() / df["close"] * 100)
+                    
+                    # Candle pattern columns for detect_candle
+                    df["body"] = df["close"] - df["open"]
+                    df["body_size"] = df["body"].abs()
+                    df["wick_up"] = df["high"] - df[["open", "close"]].max(axis=1)
+                    df["wick_down"] = df[["open", "close"]].min(axis=1) - df["low"]
                     _df_cache = df
                     print(f"[BG-2] Indicators OK, rows={len(df)}", flush=True)
             except Exception as e:
