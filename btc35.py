@@ -885,9 +885,8 @@ _exchange_local = threading.local()
 def _get_exchange():
     """Thread-local exchange instance — gunicorn thread safety için."""
     if not hasattr(_exchange_local, 'exchange'):
-        # Virginia'dan Binance engelleniyor (HTTP 451) → Bybit kullan
-        _exchange_local.exchange = ccxt.bybit({
-            "options": {"defaultType": "swap"},  # bybit USDT perpetual = swap
+        _exchange_local.exchange = ccxt.binance({
+            "options": {"defaultType": "future"},
             "apiKey": os.environ.get("BINANCE_API_KEY", ""),
             "secret": os.environ.get("BINANCE_SECRET_KEY", ""),
             "enableRateLimit": True,
@@ -6793,17 +6792,13 @@ def stream():
             # SSE thread'den price fetch (basit requests — ccxt değil)
             try:
                 import requests as _req
-                # Bybit public API (Binance Frankfurt'tan engelleniyor)
-                symbol_bybit = SYMBOL.split("/")[0] + "USDT"
-                _r = _req.get("https://api.bybit.com/v5/market/tickers", params={"category": "linear", "symbol": symbol_bybit}, timeout=5)
+                _r = _req.get("https://fapi.binance.com/fapi/v1/ticker/price", params={"symbol": SYMBOL.split("/")[0] + "USDT"}, timeout=5)
                 if _r.status_code == 200:
-                    data = _r.json()
-                    if data.get("retCode") == 0 and data.get("result", {}).get("list"):
-                        _p = float(data["result"]["list"][0].get("lastPrice", 0))
-                        _now = datetime.now().strftime("%H:%M:%S")
-                        with _lock:
-                            _state["price"] = _p
-                            _state["ts"] = _now
+                    _p = float(_r.json().get("price", 0))
+                    _now = datetime.now().strftime("%H:%M:%S")
+                    with _lock:
+                        _state["price"] = _p
+                        _state["ts"] = _now
             except Exception:
                 pass
 
