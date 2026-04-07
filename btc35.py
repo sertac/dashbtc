@@ -885,8 +885,9 @@ _exchange_local = threading.local()
 def _get_exchange():
     """Thread-local exchange instance — gunicorn thread safety için."""
     if not hasattr(_exchange_local, 'exchange'):
-        _exchange_local.exchange = ccxt.binance({
-            "options": {"defaultType": "future"},
+        # Virginia'dan Binance engelleniyor (HTTP 451) → Bybit kullan
+        _exchange_local.exchange = ccxt.bybit({
+            "options": {"defaultType": "swap"},  # bybit USDT perpetual = swap
             "apiKey": os.environ.get("BINANCE_API_KEY", ""),
             "secret": os.environ.get("BINANCE_SECRET_KEY", ""),
             "enableRateLimit": True,
