@@ -6914,6 +6914,30 @@ def debug_state():
         "has_mkt": "mkt" in state,
     }, indent=2)
 
+@app.route("/test_exchange")
+def test_exchange():
+    """Debug: Exchange bağlantısını test et."""
+    result = {"exchange": "bybit", "ticker": None, "ohlcv": None, "orderbook": None}
+    try:
+        ex = _get_exchange()
+        ticker = ex.fetch_ticker(SYMBOL)
+        result["ticker"] = f"OK: price={ticker.get('last', 0)}"
+    except Exception as e:
+        result["ticker"] = f"FAIL: {e}"
+    try:
+        ex = _get_exchange()
+        ohlcv = ex.fetch_ohlcv(SYMBOL, "5m", limit=5)
+        result["ohlcv"] = f"OK: {len(ohlcv)} candles"
+    except Exception as e:
+        result["ohlcv"] = f"FAIL: {e}"
+    try:
+        ex = _get_exchange()
+        ob = ex.fetch_order_book(SYMBOL, limit=5)
+        result["orderbook"] = f"OK: {len(ob.get('bids',[]))} bids, {len(ob.get('asks',[]))} asks"
+    except Exception as e:
+        result["orderbook"] = f"FAIL: {e}"
+    return json.dumps(result, indent=2)
+
 @app.route("/keepalive", methods=["GET"])
 def keepalive():
     """Background loop'u tetikle — UptimeRobot her 2 dk'da bir çağırır."""
