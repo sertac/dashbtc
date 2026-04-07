@@ -850,10 +850,12 @@ NEWS_FEEDS = [
 # Flash Haber Kaynakları (kayan yazı için)
 # Sadece ana akım haber kaynakları - kripto değil
 FLASH_NEWS_FEEDS = [
-    {"name": "Reuters",    "url": "https://www.reutersagency.com/feed/?post_type=best", "enabled": True},
-    {"name": "BBC World",  "url": "http://feeds.bbci.co.uk/news/world/rss.xml", "enabled": True},
-    {"name": "AP News",    "url": "https://apnews.com/rss/news", "enabled": True},
-    {"name": "Bloomberg",  "url": "https://www.bloomberg.com/politics/feed", "enabled": False},  # Genelde kapalı
+    {"name": "Reuters",    "url": "https://feeds.reuters.com/reuters/topNews", "enabled": True},
+    {"name": "BBC World",  "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "enabled": True},
+    {"name": "AP News",    "url": "https://rsshub.app/apnews/topics/news", "enabled": True},
+    {"name": "Yahoo News", "url": "https://news.yahoo.com/rss/", "enabled": True},
+    {"name": "NPR",        "url": "https://feeds.npr.org/1001/rss.xml", "enabled": True},
+    {"name": "Bloomberg",  "url": "https://www.bloomberg.com/politics/feed", "enabled": False},
     {"name": "CNBC",       "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "enabled": False},
 ]
 _FLASH_NEWS_CACHE = []
@@ -2558,48 +2560,46 @@ def fetch_flash_news():
     return _FLASH_NEWS_CACHE
 
 def fetch_social(keywords):
+    """Sosyal medya — StockTwits kapalı (403), direkt Reddit kullan."""
     items=[]; sym_base=SYMBOL.split("/")[0]
-    st_sym=STOCKTWITS_MAP.get(sym_base,sym_base+".X")
+
+    # Reddit — ana kaynak (StockTwits 403 veriyor)
     try:
-        url=f"https://api.stocktwits.com/api/2/streams/symbol/{st_sym}.json"
-        r=requests.get(url,timeout=8,headers={"User-Agent":"btc-dashboard/1.0"}); r.raise_for_status()
-        data=r.json()
-        for msg in data.get("messages",[])[:TWEET_MAX]:
-            body=_strip_html(msg.get("body",""))
-            user=msg.get("user",{}).get("username","?")
-            created=msg.get("created_at","")
-            sentiment=msg.get("entities",{}).get("sentiment",{})
-            sent_str=" 🟢" if sentiment.get("basic")=="Bullish" else " 🔴" if sentiment.get("basic")=="Bearish" else ""
-            ts_fmt=""; raw_ts=created
+        q=sym_base if not keywords else " OR ".join(keywords[:3])
+        sub="+".join(REDDIT_SUBS[:4])
+        r=requests.get(f"https://www.reddit.com/r/{sub}/search.json",headers=REDDIT_HEADERS,
+                      params={"q":q,"sort":"new","limit":20,"t":"day"},timeout=8)
+        r.raise_for_status()
+        posts=r.json().get("data",{}).get("children",[])
+        for post in posts:
+            p=post.get("data",{}); title=_strip_html(p.get("title",""))
+            author=p.get("author",""); score=p.get("score",0); comms=p.get("num_comments",0)
+            created=p.get("created_utc",0); link="https://reddit.com"+p.get("permalink","")
+            ts_fmt=""; raw_ts=""
             if created:
-                try:
-                    from datetime import timezone
-                    dt=datetime.strptime(created,"%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-                    ts_fmt=dt.strftime("%H:%M")
-                except: ts_fmt=created[:5]
-            if body: items.append({"text":body+sent_str,"user":"@"+user,"url":f"https://stocktwits.com/{user}","ts":ts_fmt,"raw_ts":raw_ts,"score":0,"comms":0})
-        print(f"[StockTwits] {len(items)} mesaj ({st_sym})")
+                from datetime import timezone
+                dt=datetime.utcfromtimestamp(created).replace(tzinfo=timezone.utc)
+                ts_fmt=dt.strftime("%H:%M"); raw_ts=dt.isoformat()
+            if title: items.append({"text":title,"user":f"u/{author}","url":link,"ts":ts_fmt,"raw_ts":raw_ts,"score":score,"comms":comms})
+        print(f"[Reddit] {len(items)} post ({sub})")
     except Exception as e:
-        print(f"[StockTwits] {e}")
+        print(f"[Reddit] Hata: {e}")
+        # Son çare: genel kripto subreddit
         try:
-            q=sym_base if not keywords else " OR ".join(keywords[:3])
-            sub="+".join(REDDIT_SUBS[:4])
-            r=requests.get(f"https://www.reddit.com/r/{sub}/search.json",headers=REDDIT_HEADERS,
-                          params={"q":q,"sort":"new","limit":20,"t":"day"},timeout=8)
+            r=requests.get("https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15",
+                          headers=REDDIT_HEADERS,timeout=8)
             r.raise_for_status()
             posts=r.json().get("data",{}).get("children",[])
             for post in posts:
                 p=post.get("data",{}); title=_strip_html(p.get("title",""))
                 author=p.get("author",""); score=p.get("score",0); comms=p.get("num_comments",0)
                 created=p.get("created_utc",0); link="https://reddit.com"+p.get("permalink","")
-                ts_fmt=""; raw_ts=""
-                if created:
-                    from datetime import timezone
-                    dt=datetime.utcfromtimestamp(created).replace(tzinfo=timezone.utc)
-                    ts_fmt=dt.strftime("%H:%M"); raw_ts=dt.isoformat()
-                if title: items.append({"text":title,"user":f"u/{author}","url":link,"ts":ts_fmt,"raw_ts":raw_ts,"score":score,"comms":comms})
+                ts_fmt=datetime.utcfromtimestamp(created).strftime("%H:%M") if created else ""
+                if title: items.append({"text":title,"user":f"u/{author}","url":link,"ts":ts_fmt,"raw_ts":"","score":score,"comms":comms})
             print(f"[Reddit fallback] {len(items)} post")
-        except Exception as e2: print(f"[Reddit fallback] {e2}")
+        except Exception as e2:
+            print(f"[Reddit fallback] {e2}")
+
     items.sort(key=lambda x:x.get("raw_ts",""),reverse=True)
     return items[:TWEET_MAX]
 
