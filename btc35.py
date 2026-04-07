@@ -2713,6 +2713,11 @@ def cluster_walls(orders,ref,n):
     return sorted(top,key=lambda x:x[0])
 
 def detect_candle(df,is_long):
+    # Check if required columns exist
+    required = ["body_size", "wick_down", "wick_up", "body"]
+    if not all(col in df.columns for col in required):
+        return None  # Skip candle detection if columns missing
+    
     c=df.iloc[-1]; p=df.iloc[-2]
     bs=c["body_size"]; wd=c["wick_down"]; wu=c["wick_up"]; b=c["body"]
     if is_long:
