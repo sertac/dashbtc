@@ -6780,13 +6780,17 @@ def stream():
             # SSE thread'den price fetch (basit requests — ccxt değil)
             try:
                 import requests as _req
-                _r = _req.get("https://fapi.binance.com/fapi/v1/ticker/price", params={"symbol": SYMBOL.split("/")[0] + "USDT"}, timeout=5)
+                # Bybit public API (Binance Frankfurt'tan engelleniyor)
+                symbol_bybit = SYMBOL.split("/")[0] + "USDT"
+                _r = _req.get("https://api.bybit.com/v5/market/tickers", params={"category": "linear", "symbol": symbol_bybit}, timeout=5)
                 if _r.status_code == 200:
-                    _p = float(_r.json().get("price", 0))
-                    _now = datetime.now().strftime("%H:%M:%S")
-                    with _lock:
-                        _state["price"] = _p
-                        _state["ts"] = _now  # ts güncelle ki SSE mesaj göndersin!
+                    data = _r.json()
+                    if data.get("retCode") == 0 and data.get("result", {}).get("list"):
+                        _p = float(data["result"]["list"][0].get("lastPrice", 0))
+                        _now = datetime.now().strftime("%H:%M:%S")
+                        with _lock:
+                            _state["price"] = _p
+                            _state["ts"] = _now
             except Exception:
                 pass
 
@@ -6813,13 +6817,19 @@ def stream():
                 "epsilon": _rl_config.get("epsilon", 0.2),
                 "q_states": len(_rl_q_table),
                 "total_reward": _rl_stats.get("total_reward", 0),
-                "wins": _rl_stats.get("wins", 0),  # Kazanılan sinyal sayısı
-                "losses": _rl_stats.get("losses", 0),  # Kaybedilen sinyal sayısı
-                "initialized": _rl_initialized,  # RL optimize etti mi?
+                "wins": _rl_stats.get("wins", 0),
+                "losses": _rl_stats.get("losses", 0),
+                "initialized": _rl_initialized,
                 "signals_closed": _rl_stats.get("signals_closed", 0),
-                "threshold_history": _rl_threshold_history,  # Son threshold değişimleri
+                "threshold_history": _rl_threshold_history,
             }
-            if ts and ts!=last_ts: yield f"data: {json.dumps(state)}\n\n"; last_ts=ts
+            # Her durumda state'i gönder (ts değişmese bile)
+            if ts and ts!=last_ts:
+                yield f"data: {json.dumps(state)}\n\n"
+                last_ts=ts
+            else:
+                # 5 saniyede bir heartbeat — frontend bağlantıyı koparmasın
+                yield f": heartbeat\n\n"
             time.sleep(1)
     return Response(event_stream(),mimetype="text/event-stream",headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
 
