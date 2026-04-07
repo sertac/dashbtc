@@ -1162,7 +1162,10 @@ def db_init():
 
         return True
     _db_write(_fn)
-    print(f"[DB] WAL mode — {DB_FILE}")
+    if _USE_POSTGRES:
+        print(f"[DB] PostgreSQL ready — {DATABASE_URL[:30]}...")
+    else:
+        print(f"[DB] WAL mode — {DB_FILE}")
 
 def db_insert_signal(sig):
     def _fn(conn, s):
