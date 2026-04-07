@@ -885,12 +885,15 @@ _exchange_local = threading.local()
 def _get_exchange():
     """Thread-local exchange instance — gunicorn thread safety için."""
     if not hasattr(_exchange_local, 'exchange'):
+        # Virginia'dan fapi.binance.com engelleniyor (HTTP 451)
+        # Testnet kullan — aynı REST API, API key gerekmez (public endpoints)
         _exchange_local.exchange = ccxt.binance({
             "options": {"defaultType": "future"},
             "apiKey": os.environ.get("BINANCE_API_KEY", ""),
             "secret": os.environ.get("BINANCE_SECRET_KEY", ""),
             "enableRateLimit": True,
             "timeout": 15000,
+            "sandboxMode": True,  # testnet.binancefuture.com kullan
         })
     return _exchange_local.exchange
 
@@ -6792,7 +6795,8 @@ def stream():
             # SSE thread'den price fetch (basit requests — ccxt değil)
             try:
                 import requests as _req
-                _r = _req.get("https://fapi.binance.com/fapi/v1/ticker/price", params={"symbol": SYMBOL.split("/")[0] + "USDT"}, timeout=5)
+                # Testnet — Virginia'dan erişilebilir
+                _r = _req.get("https://testnet.binancefuture.com/fapi/v1/ticker/price", params={"symbol": SYMBOL.split("/")[0] + "USDT"}, timeout=5)
                 if _r.status_code == 200:
                     _p = float(_r.json().get("price", 0))
                     _now = datetime.now().strftime("%H:%M:%S")
