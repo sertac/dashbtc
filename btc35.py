@@ -949,44 +949,58 @@ def _get_rconn():
                 _db_rconn.row_factory = sqlite3.Row
         return _db_rconn
 
-def _db_writer_loop():
-    """DB yazma thread'i — PostgreSQL veya SQLite."""
-    if _USE_POSTGRES:
-        raw_conn = psycopg2.connect(DATABASE_URL)
-        raw_conn.autocommit = False
+def _get_pg_conn():
+    """PostgreSQL bağlantısı — Neon sleep sonrası reconnect destekli."""
+    import psycopg2
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            raw = psycopg2.connect(DATABASE_URL)
+            raw.autocommit = False
+            return raw
+        except Exception as e:
+            wait = min(2 ** attempt, 30)
+            print(f"[DB] PostgreSQL connect retry {attempt+1}/{max_retries} ({e}), wait {wait}s", flush=True)
+            time.sleep(wait)
+    raise RuntimeError(f"PostgreSQL bağlantısı {max_retries} denemede başarısız")
 
-        # PostgreSQL connection wrapper — sqlite3 conn.execute() uyumluluğu
-        class _PgCompatConn:
-            def __init__(self, conn):
-                self._conn = conn
-            def execute(self, sql, params=None):
-                # ? → %s çevirisi (SQLite → PostgreSQL)
-                sql = sql.replace("?", "%s")
-                try:
-                    cur = self._conn.cursor()
-                    cur.execute(sql, params or ())
-                    return cur
-                except Exception:
-                    # Transaction aborted → rollback ve tekrar dene
-                    try:
-                        self._conn.rollback()
-                    except Exception:
-                        pass
-                    cur = self._conn.cursor()
-                    cur.execute(sql, params or ())
-                    return cur
-            def executemany(self, sql, seq_of_params):
-                sql = sql.replace("?", "%s")
-                cur = self._conn.cursor()
-                cur.executemany(sql, seq_of_params)
-                return cur
-            def commit(self):
-                self._conn.commit()
-            def rollback(self):
-                self._conn.rollback()
-            def close(self):
-                self._conn.close()
-        conn = _PgCompatConn(raw_conn)
+class _PgCompatConn:
+    """PostgreSQL → sqlite3 uyumlu wrapper."""
+    def __init__(self, conn):
+        self._conn = conn
+    def execute(self, sql, params=None):
+        sql = sql.replace("?", "%s")
+        try:
+            cur = self._conn.cursor()
+            cur.execute(sql, params or ())
+            return cur
+        except Exception:
+            try: self._conn.rollback()
+            except: pass
+            cur = self._conn.cursor()
+            cur.execute(sql, params or ())
+            return cur
+    def executemany(self, sql, seq_of_params):
+        sql = sql.replace("?", "%s")
+        cur = self._conn.cursor()
+        cur.executemany(sql, seq_of_params)
+        return cur
+    def commit(self):
+        self._conn.commit()
+    def rollback(self):
+        self._conn.rollback()
+    def close(self):
+        self._conn.close()
+
+def _db_writer_loop():
+    """DB yazma thread'i — PostgreSQL veya SQLite. Reconnect destekli."""
+    if _USE_POSTGRES:
+        try:
+            raw_conn = _get_pg_conn()
+            conn = _PgCompatConn(raw_conn)
+        except Exception as e:
+            print(f"[DB] Writer loop connect failed: {e}", flush=True)
+            return  # Thread ölür, lazy init tekrar dener
     else:
         conn = sqlite3.connect(DB_FILE, check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -1022,27 +1036,58 @@ def _db_write(fn, *args, wait=True):
     return None
 
 def _db_read(sql, params=()):
-    """Read — PostgreSQL veya SQLite."""
-    try:
-        conn = _get_rconn()
-        with _db_rlock:
-            if _USE_POSTGRES:
-                # PostgreSQL: ? → %s
-                sql = sql.replace("?", "%s")
-                cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                cur.execute(sql, params)
-                rows = cur.fetchall()
-                return [dict(r) for r in rows]
+    """Read — PostgreSQL veya SQLite. Reconnect destekli."""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            conn = _get_rconn()
+            with _db_rlock:
+                if _USE_POSTGRES:
+                    # PostgreSQL: ? → %s
+                    sql = sql.replace("?", "%s")
+                    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    cur.execute(sql, params or ())
+                    return cur.fetchall()
+                else:
+                    cur = conn.cursor()
+                    cur.execute(sql, params or ())
+                    return [dict(r) for r in cur.fetchall()]
+        except (Exception,) as e:
+            # Connection hatası → rconn'u sıfırla, tekrar dene
+            if "connection" in str(e).lower() or "server" in str(e).lower() or attempt < max_retries - 1:
+                global _db_rconn
+                with _db_rlock:
+                    _db_rconn = None
+                wait = 2 ** attempt
+                print(f"[DB READ] Retry {attempt+1}/{max_retries} ({e})", flush=True)
+                time.sleep(wait)
             else:
-                rows = conn.execute(sql, params).fetchall()
-                return rows
-    except Exception as e:
-        print(f"[DB READ ERR] {e} | SQL: {sql[:80]}")
-        return []
+                raise
+    return []
 
-# ── DB Writer thread başlat ────────────────────────────────────
-_db_writer_thread = threading.Thread(target=_db_writer_loop, daemon=True)
-_db_writer_thread.start()
+# ── DB Writer thread — lazy başlatma (Neon sleep sorununu çözer) ─
+_db_writer_started = False
+_db_writer_lock = threading.Lock()
+
+def _ensure_db_writer():
+    """DB writer thread'i lazy başlat — Neon uykudan uyanana kadar dene."""
+    global _db_writer_started, _db_writer_thread
+    with _db_writer_lock:
+        if _db_writer_started:
+            return
+        try:
+            _db_writer_thread = threading.Thread(target=_db_writer_loop, daemon=True)
+            _db_writer_thread.start()
+            _db_writer_started = True
+            print(f"[DB] Writer thread started", flush=True)
+        except Exception as e:
+            print(f"[DB] Writer init error: {e}, retry later", flush=True)
+
+# Wrapper: her write işleminde _ensure_db_writer çağrılır
+_orig_db_write = _db_write
+def _db_write_safe(fn, *args, **kwargs):
+    _ensure_db_writer()
+    return _orig_db_write(fn, *args, **kwargs)
 
 def db_init():
     pk_type = "SERIAL PRIMARY KEY" if _USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
