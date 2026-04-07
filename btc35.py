@@ -6896,6 +6896,23 @@ def health_check():
         "pending_signals": len([s for s in _pending_signals if s.get("symbol") == SYMBOL]),
     })
 
+@app.route("/debug_state")
+def debug_state():
+    """Debug: _state içeriğini göster."""
+    with _lock:
+        state = dict(_state)
+    return json.dumps({
+        "ts": state.get("ts"),
+        "price": state.get("price"),
+        "rsi": state.get("rsi"),
+        "candles_count": len(state.get("candles", [])),
+        "signals_count": len(state.get("signals", [])),
+        "bid_walls": len(state.get("bid_walls", [])),
+        "ask_walls": len(state.get("ask_walls", [])),
+        "has_htf": "htf" in state,
+        "has_mkt": "mkt" in state,
+    }, indent=2)
+
 @app.route("/keepalive", methods=["GET"])
 def keepalive():
     """Background loop'u tetikle — UptimeRobot her 2 dk'da bir çağırır."""
