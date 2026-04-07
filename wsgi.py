@@ -2,43 +2,15 @@
 """
 BTC/USDT Signal Bot — WSGI Entry Point
 Production deployment (Render / Railway / Gunicorn)
+Background loop başlatma gunicorn.conf.py'de post_worker_init ile yapılır.
 """
 import sys
 import os
-import threading
-import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from btc35 import app, db_init, load_signals, background_loop
-
-def _log(msg):
-    print(msg, flush=True)
-
-def _start_bg():
-    """Background loop'u başlat."""
-    def _run():
-        try:
-            _log("[BG] Starting background_loop...")
-            background_loop()
-        except Exception as e:
-            _log(f"[BG] CRASH: {e}")
-            import traceback
-            _log(traceback.format_exc())
-    t = threading.Thread(target=_run, daemon=True, name="bg-loop")
-    t.start()
-    _log(f"[BG] Thread started, alive={t.is_alive()}")
-
-# DB init
-try:
-    db_init()
-    load_signals()
-    _log("[WSGI] DB init and signals loaded")
-except Exception as e:
-    _log(f"[WSGI] DB init ERR: {e}")
-
-# Background loop başlat — gunicorn worker'da da çalışsın
-_start_bg()
+# Sadece Flask app'i import et — gunicorn.conf.py background_loop'u başlatır
+from btc35 import app
 
 # WSGI application
 application = app

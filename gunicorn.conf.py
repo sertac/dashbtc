@@ -2,7 +2,6 @@
 Gunicorn config — post_worker_init ile background loop başlat
 """
 import threading
-import sys
 
 def _log(msg):
     print(msg, flush=True)
@@ -11,21 +10,12 @@ def post_worker_init(worker):
     """Her worker başlatıldığında background loop'u başlat."""
     _log(f"[GUNICORN] post_worker_init: worker {worker.pid}")
     try:
-        from btc35 import background_loop, db_init, load_signals
-        _log("[GUNICORN] Import OK")
+        from btc35 import background_loop
 
-        # DB init
-        try:
-            db_init()
-            load_signals()
-            _log("[GUNICORN] DB init OK")
-        except Exception as e:
-            _log(f"[GUNICORN] DB init ERR: {e}")
-
-        # Background loop thread
+        # Background loop thread (daemon — worker ölünce biter)
         def _run():
             try:
-                _log(f"[BG THREAD {worker.pid}] Starting...")
+                _log(f"[BG THREAD {worker.pid}] Starting background_loop...")
                 background_loop()
             except Exception as e:
                 _log(f"[BG THREAD {worker.pid}] CRASH: {e}")
