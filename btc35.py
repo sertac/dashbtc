@@ -870,6 +870,15 @@ REDDIT_HEADERS = {"User-Agent": "btc-dashboard/1.0", "Accept": "application/json
 
 app      = Flask(__name__)
 
+# ── CORS Headers — SSE stream ve fetch istekleri için ──
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cache-Control'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
 # ── CCXT exchange — her thread için ayrı instance (thread-safe) ──
 _exchange_local = threading.local()
 
