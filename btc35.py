@@ -850,11 +850,12 @@ NEWS_FEEDS = [
 # Flash Haber Kaynakları (kayan yazı için)
 # Sadece ana akım haber kaynakları - kripto değil
 FLASH_NEWS_FEEDS = [
-    {"name": "Reuters",    "url": "https://feeds.reuters.com/reuters/topNews", "enabled": True},
+    {"name": "Reuters",    "url": "https://feeds.bbci.co.uk/news/rss.xml", "enabled": True},  # BBC fallback
     {"name": "BBC World",  "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "enabled": True},
-    {"name": "AP News",    "url": "https://rsshub.app/apnews/topics/news", "enabled": True},
+    {"name": "Al Jazeera", "url": "https://www.aljazeera.com/xml/rss2.xml", "enabled": True},
     {"name": "Yahoo News", "url": "https://news.yahoo.com/rss/", "enabled": True},
     {"name": "NPR",        "url": "https://feeds.npr.org/1001/rss.xml", "enabled": True},
+    {"name": "Guardian",   "url": "https://www.theguardian.com/world/rss", "enabled": True},
     {"name": "Bloomberg",  "url": "https://www.bloomberg.com/politics/feed", "enabled": False},
     {"name": "CNBC",       "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "enabled": False},
 ]
