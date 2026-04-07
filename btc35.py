@@ -1065,29 +1065,10 @@ def _db_read(sql, params=()):
                 raise
     return []
 
-# ── DB Writer thread — lazy başlatma (Neon sleep sorununu çözer) ─
-_db_writer_started = False
-_db_writer_lock = threading.Lock()
-
-def _ensure_db_writer():
-    """DB writer thread'i lazy başlat — Neon uykudan uyanana kadar dene."""
-    global _db_writer_started, _db_writer_thread
-    with _db_writer_lock:
-        if _db_writer_started:
-            return
-        try:
-            _db_writer_thread = threading.Thread(target=_db_writer_loop, daemon=True)
-            _db_writer_thread.start()
-            _db_writer_started = True
-            print(f"[DB] Writer thread started", flush=True)
-        except Exception as e:
-            print(f"[DB] Writer init error: {e}, retry later", flush=True)
-
-# Wrapper: her write işleminde _ensure_db_writer çağrılır
-_orig_db_write = _db_write
-def _db_write_safe(fn, *args, **kwargs):
-    _ensure_db_writer()
-    return _orig_db_write(fn, *args, **kwargs)
+# ── DB Writer thread — import'ta başlat ─
+_db_writer_thread = threading.Thread(target=_db_writer_loop, daemon=True)
+_db_writer_thread.start()
+_db_writer_started = True
 
 def db_init():
     pk_type = "SERIAL PRIMARY KEY" if _USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -6833,7 +6814,7 @@ def stream():
             }
             # Her durumda state'i gönder (ts değişmese bile)
             if ts and ts!=last_ts:
-                yield f"data: {json.dumps(state)}\n\n"
+                yield f"data: {json.dumps(state, default=lambda o: bool(o) if isinstance(o, bool) else (o.item() if hasattr(o, 'item') else str(o)))}\n\n"
                 last_ts=ts
             else:
                 # 5 saniyede bir heartbeat — frontend bağlantıyı koparmasın
