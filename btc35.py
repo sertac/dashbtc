@@ -3714,6 +3714,29 @@ def background_loop():
                         print(f"[MKT Hata] {e}")
                         _api_record_failure("market_data")
 
+            # ── DB Backup (her 4 saat) ──
+            DB_BACKUP_INTERVAL = 4 * 3600  # 4 saat
+            _db_last_backup = globals().get("_db_last_backup", 0)
+            if now - _db_last_backup >= DB_BACKUP_INTERVAL:
+                try:
+                    import shutil
+                    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db_backups")
+                    os.makedirs(backup_dir, exist_ok=True)
+                    backup_path = os.path.join(backup_dir, f"signals_{ts_str}.db")
+                    if _USE_POSTGRES:
+                        print(f"[DB BACKUP] PostgreSQL mode — skip")
+                    else:
+                        shutil.copy2(DB_FILE, backup_path)
+                        # En eski 3 backup'ı sil (son 3'ü tut)
+                        backups = sorted([os.path.join(backup_dir, f) for f in os.listdir(backup_dir) if f.endswith(".db")])
+                        while len(backups) > 3:
+                            os.remove(backups.pop(0))
+                        print(f"[DB BACKUP] Saved → {backup_path} ({len(backups)} backup tutuluyor)")
+                    globals()["_db_last_backup"] = now
+                except Exception as e:
+                    print(f"[DB BACKUP Hata] {e}")
+
             # Likidasyon verisi (her 60 sn)
             if now-_liq_last_fetch>=60:
                 if _api_should_skip("liquidations", now, _liq_last_fetch):
