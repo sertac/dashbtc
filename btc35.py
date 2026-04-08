@@ -3714,48 +3714,6 @@ def background_loop():
                         print(f"[MKT Hata] {e}")
                         _api_record_failure("market_data")
 
-            # ── Kısmi state güncelle — dashboard boş kalmasın — HER DÖNGÜDE ÇALIŞIR ──
-            try:
-                with _lock:
-                    _state.update({
-                        "ts": datetime.now().strftime("%H:%M:%S"),
-                        "symbol": SYMBOL,
-                        "price": 0,
-                        "change24h": 0,
-                        "rsi": 0,
-                        "ema_fast": 0,
-                        "ema_slow": 0,
-                        "vol_ratio": 0,
-                        "atr_pct": 0,
-                        "bid_walls": [],
-                        "ask_walls": [],
-                        "signals": [],
-                        "candles": [],
-                        "htf": dict(_htf_cache) if _htf_cache else {},
-                        "mkt": dict(_mkt_cache) if _mkt_cache else {},
-                        "news": _news_cache[:25] if '_news_cache' in globals() else [],
-                        "tweets": _tweet_cache[:20] if '_tweet_cache' in globals() else [],
-                        "tweet_kw": _tweet_keywords if '_tweet_keywords' in globals() else [],
-                        "flash_news": _FLASH_NEWS_CACHE if '_FLASH_NEWS_CACHE' in globals() else [],
-                        "eth_staking": dict(_eth_staking_cache) if '_eth_staking_cache' in globals() and _eth_staking_cache else None,
-                        "eth_onchain": dict(_eth_onchain_cache) if '_eth_onchain_cache' in globals() and _eth_onchain_cache else None,
-                        "eth_onchain_history": [],
-                        "eth_onchain_trend": {},
-                        "predictions": {},
-                        "kalman_history": [],
-                        "pending": list(_pending_signals),
-                        "closed": [],
-                        "stats": {},
-                        "rl_status": {},
-                        "mkt_history": list(_mkt_history),
-                        "spread": {"spread_pct": 0, "state": "OK", "ts": "—"},
-                        "liquidations": {"long_liq_1h": "—", "short_liq_1h": "—", "liq_ratio": 1.0, "liq_trend": "nötr", "big_liq": False, "ts": ""},
-                        "mark_index": {"mark_price": 0, "index_price": 0, "basis_pct": 0, "basis_trend": "nötr", "divergence": 0, "ts": ""},
-                        "funding_trend": {"current_fr": 0, "avg_8h": 0, "trend": "nötr", "extreme": False, "ts": ""},
-                    })
-            except Exception as e:
-                print(f"[STATE UPDATE HATA] {e}", flush=True)
-
             # Likidasyon verisi (her 60 sn)
             if now-_liq_last_fetch>=60:
                 if _api_should_skip("liquidations", now, _liq_last_fetch):
