@@ -4109,6 +4109,10 @@ def background_loop():
                                 now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 _close_signal(existing, outcome, net_pct, net_usd, now_ts, exit_price=price, close_reason=f"↩ Reverse — {reason}")
                                 _pending_signals = [p for p in _pending_signals if not (p.get("symbol")==SYMBOL and p["dir"]==existing["dir"])]
+                                print(f"[REVERSE] {existing['dir']} @ {existing['entry']} → {sig['dir']} | {reason} | P&L:{net_pct}%")
+                                continue
+                            else:
+                                # Şartlar net değil — mevcut sinyali koru, yeni sinyali ekleme
                                 continue
                         new_sig = {**sig, "ts": datetime.now().strftime("%H:%M:%S"), "symbol": SYMBOL, "_wait_count": 0}
                         try:
