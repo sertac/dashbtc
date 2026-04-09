@@ -862,7 +862,7 @@ FLASH_NEWS_FEEDS = [
 _FLASH_NEWS_CACHE = []
 _FLASH_NEWS_LAST_FETCH = -999
 _FLASH_NEWS_REFRESH = 180  # 3 dakikada bir (daha az sık)
-_FLASH_NEWS_SPEED = 90  # Kayan yazı hızı (saniye) - kullanıcı değiştirebilir
+_FLASH_NEWS_SPEED = 180  # Kayan yazı hızı (saniye) - kullanıcı değiştirebilir
 
 STOCKTWITS_MAP = {
     "BTC":"BTC.X", "ETH":"ETH.X", "SOL":"SOL.X",
@@ -4683,7 +4683,7 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
 
 <!-- Flash Haber Kayan Yazı -->
 <div id="flash-news-ticker" style="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#1a1f25,#0f1216);border-top:2px solid var(--purple);padding:8px 0;overflow:hidden;white-space:nowrap">
-  <div id="flash-news-content" style="display:inline-block;animation:scroll-left var(--news-speed,150s) linear infinite">
+  <div id="flash-news-content" style="display:inline-block;animation:scroll-left var(--news-speed,180s) linear infinite">
     <span style="color:var(--purple);font-weight:700;margin-right:20px">📰 FLASH NEWS</span>
     <span id="flash-news-items" style="color:var(--text)"></span>
   </div>
@@ -4691,9 +4691,9 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
   <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity 0.3s"
        id="news-controls"
        onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0'">
-    <button onclick="adjustNewsSpeed(-10)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:2px 8px;cursor:pointer;font-size:9px" title="Yavaşlat">🐢</button>
-    <button onclick="adjustNewsSpeed(10)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:2px 8px;cursor:pointer;font-size:9px" title="Hızlandır">🐇</button>
-    <span id="news-speed-display" style="font-size:9px;color:var(--text-dim);margin-left:4px;min-width:30px;display:inline-block;text-align:center">90s</span>
+    <button onclick="adjustNewsSpeed(20)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:2px 8px;cursor:pointer;font-size:9px" title="Yavaşlat">🐢</button>
+    <button onclick="adjustNewsSpeed(-20)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:2px 8px;cursor:pointer;font-size:9px" title="Hızlandır">🐇</button>
+    <span id="news-speed-display" style="font-size:9px;color:var(--text-dim);margin-left:4px;min-width:30px;display:inline-block;text-align:center">180s</span>
   </div>
 </div>
 
@@ -4712,10 +4712,10 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
 </style>
 
 <script>
-// Haber akış hızı ayarı (default 150 saniye - çok yavaş)
-let newsSpeed = 150;  // saniye
+// Haber akış hızı ayarı (default 180 saniye)
+let newsSpeed = 180;  // saniye
 function adjustNewsSpeed(delta){
-  newsSpeed = Math.max(60, Math.min(300, newsSpeed + delta));
+  newsSpeed = Math.max(60, Math.min(400, newsSpeed + delta));
   document.getElementById('flash-news-content').style.setProperty('--news-speed', newsSpeed+'s');
   document.getElementById('news-speed-display').textContent = newsSpeed+'s';
   localStorage.setItem('news_speed', newsSpeed);
