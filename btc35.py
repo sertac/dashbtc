@@ -584,6 +584,9 @@ def optimize_thresholds():
                   f"Missed={_rl_stats['missed_rallies']} | Fakeout={_rl_stats['saved_fakeouts']} | "
                   f"ε={_rl_config['epsilon']:.2f} | Q-states={len(_rl_q_table)}")
 
+            # DB'ye kaydet
+            db_save_rl_state()
+
         _rl_stats["last_optimize"] = _rl_stats["signals_closed"]
 
     except Exception as e:
@@ -1218,6 +1221,32 @@ def db_init():
         except Exception:
             pass
 
+        # RL State tablosu — öğrenilmiş eşik değerleri ve istatistikler
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rl_state (
+                id              {pk_type},
+                key             TEXT    NOT NULL UNIQUE,
+                value           TEXT,
+                updated_at      TEXT    NOT NULL DEFAULT ({default_ts})
+            )""")
+        conn.commit()
+
+        # RL Q-Table tablosu — state → action değerleri
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rl_q_table (
+                id              {pk_type},
+                state_hash      TEXT    NOT NULL,
+                action_idx      INTEGER NOT NULL,
+                q_value         REAL    NOT NULL,
+                updated_at      TEXT    NOT NULL DEFAULT ({default_ts})
+            )""")
+        conn.commit()
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_rl_q_state ON rl_q_table(state_hash)")
+            conn.commit()
+        except Exception:
+            pass
+
         return True
     _db_write(_fn)
     if _USE_POSTGRES:
@@ -1539,6 +1568,85 @@ def db_clear_manual_positions(symbol=None):
         conn.commit()
     _db_write(_fn, symbol)
 
+# ── RL State Persistence ────────────────────────────────────────
+def db_save_rl_state():
+    """RL Q-table, thresholds ve stats'ı DB'ye kaydet."""
+    import json
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Thresholds
+    _db_write(lambda c, k, v: c.execute(
+        "INSERT OR REPLACE INTO rl_state(key, value, updated_at) VALUES (?,?,?)",
+        (k, json.dumps(v), now)), "rl_thresholds", _rl_thresholds, wait=False)
+    
+    # Stats
+    _db_write(lambda c, k, v: c.execute(
+        "INSERT OR REPLACE INTO rl_state(key, value, updated_at) VALUES (?,?,?)",
+        (k, json.dumps(v), now)), "rl_stats", _rl_stats, wait=False)
+    
+    # Config
+    _db_write(lambda c, k, v: c.execute(
+        "INSERT OR REPLACE INTO rl_state(key, value, updated_at) VALUES (?,?,?)",
+        (k, json.dumps(v), now)), "rl_config", _rl_config, wait=False)
+    
+    # Current action
+    _db_write(lambda c, k, v: c.execute(
+        "INSERT OR REPLACE INTO rl_state(key, value, updated_at) VALUES (?,?,?)",
+        (k, str(v), now)), "rl_current_action_idx", _rl_current_action_idx, wait=False)
+    
+    # Initialized flag
+    _db_write(lambda c, k, v: c.execute(
+        "INSERT OR REPLACE INTO rl_state(key, value, updated_at) VALUES (?,?,?)",
+        (k, str(v), now)), "rl_initialized", _rl_initialized, wait=False)
+    
+    # Q-table (batch upsert — sadece non-zero değerleri)
+    def _save_qtable(c):
+        c.execute("DELETE FROM rl_q_table")
+        rows = []
+        for state_hash, actions in _rl_q_table.items():
+            for action_idx, q_val in actions.items():
+                if abs(q_val) > 0.001:  # Sadece anlamlı değerleri kaydet
+                    rows.append((state_hash, int(action_idx), float(q_val), now))
+        if rows:
+            c.executemany(
+                "INSERT INTO rl_q_table(state_hash, action_idx, q_value, updated_at) VALUES (?,?,?,?)",
+                rows)
+        c.commit()
+    _db_write(_save_qtable, wait=False)
+
+def db_load_rl_state():
+    """RL state'i DB'den yükle."""
+    import json
+    global _rl_thresholds, _rl_stats, _rl_config, _rl_current_action_idx, _rl_initialized, _rl_q_table
+    
+    try:
+        rows = _db_read("SELECT key, value FROM rl_state WHERE key IN ('rl_thresholds','rl_stats','rl_config','rl_current_action_idx','rl_initialized')")
+        for r in rows:
+            key, val = r["key"], r["value"]
+            if key == "rl_thresholds":
+                _rl_thresholds.update(json.loads(val))
+            elif key == "rl_stats":
+                _rl_stats.update(json.loads(val))
+            elif key == "rl_config":
+                _rl_config.update(json.loads(val))
+            elif key == "rl_current_action_idx":
+                _rl_current_action_idx = int(val)
+            elif key == "rl_initialized":
+                _rl_initialized = val.lower() == "true"
+        
+        # Q-table
+        qrows = _db_read("SELECT state_hash, action_idx, q_value FROM rl_q_table")
+        for r in qrows:
+            sh = r["state_hash"]
+            if sh not in _rl_q_table:
+                _rl_q_table[sh] = {}
+            _rl_q_table[sh][int(r["action_idx"])] = float(r["q_value"])
+        
+        if _rl_initialized:
+            print(f"[RL] DB'den yüklendi: {_rl_stats['wins']}W/{_rl_stats['losses']}L, Reward={_rl_stats['total_reward']:+.1f}, Q-states={len(_rl_q_table)}")
+    except Exception as e:
+        print(f"[RL LOAD ERR] {e}")
+
 _lock            = threading.Lock()
 _state           = {}
 _df_cache        = None  # Son DataFrame (RL reward hesaplaması için)
@@ -1581,7 +1689,10 @@ def load_signals():
             print(f"[RL] Son sinyal: {last_closed.get('dir')} {last_closed.get('outcome')} @ {last_closed.get('entry')}")
         
         print(f"[DB] Yüklendi: {len(_pending_signals)} bekleyen, {len(_closed_signals)} kapalı, {len(_mkt_history)} market history")
-        print(f"[RL] DB'den yüklendi: {_rl_stats['wins']} WIN, {_rl_stats['losses']} LOSS, Reward: {_rl_stats['total_reward']:+.1f}")
+
+        # RL state'i DB'den yükle (thresholds, Q-table, stats)
+        db_load_rl_state()
+        print(f"[RL] Yüklendi: {_rl_stats['wins']}W/{_rl_stats['losses']}L, Reward={_rl_stats['total_reward']:+.1f}, Q-states={len(_rl_q_table)}, initialized={_rl_initialized}")
         
         # İlk optimizasyonu kontrol et (eğer 5+ sinyal varsa)
         if _rl_stats["signals_closed"] >= _rl_config["min_signals"]:
@@ -3564,7 +3675,7 @@ def _close_signal(sig, outcome, net_pnl_pct, net_pnl_usd, close_ts, exit_price=N
     # Her optimize_every sinyalde bir Q-table güncelle
     if _rl_stats["signals_closed"] % _rl_config["optimize_every"] == 0:
         optimize_thresholds()
-    
+
     # Win rate history kaydet (her 5 sinyalde bir)
     if _rl_stats["signals_closed"] % 5 == 0:
         try:
@@ -3572,6 +3683,9 @@ def _close_signal(sig, outcome, net_pnl_pct, net_pnl_usd, close_ts, exit_price=N
             print(f"[WIN RATE] History kaydedildi: {_rl_stats['wins']}W/{_rl_stats['losses']}L")
         except Exception as e:
             print(f"[WIN RATE HATA] {e}")
+
+    # RL state'i DB'ye kaydet (her kapanışta — stats değişti)
+    db_save_rl_state()
 
 def check_pending_signals(df):
     """
