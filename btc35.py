@@ -1079,16 +1079,16 @@ def db_init():
     default_ts = "NOW()" if _USE_POSTGRES else "datetime('now')"
 
     def _fn(conn):
-        # Drop existing tables to ensure clean schema (safe for fresh Neon DB)
-        # Her DROP ayrı try/except ile — bir hata diğerlerini engellemesin
-        for table in ["signals", "market_history", "manual_positions",
-                      "win_rate_history", "eth_onchain_history"]:
-            try:
-                conn.execute(f"DROP TABLE IF EXISTS {table}")
-                if _USE_POSTGRES:
-                    conn.commit()  # Her DROP'u commit et (PostgreSQL)
-            except Exception:
-                pass
+        # Sadece PostgreSQL'te DROP et (Neon için şema sıfırlama)
+        # SQLite'ta DROP YOK — mevcut veriler korunur
+        if _USE_POSTGRES:
+            for table in ["signals", "market_history", "manual_positions",
+                          "win_rate_history", "eth_onchain_history"]:
+                try:
+                    conn.execute(f"DROP TABLE IF EXISTS {table}")
+                    conn.commit()
+                except Exception:
+                    pass
 
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS signals (
@@ -1546,11 +1546,11 @@ _pending_signals = []   # RAM cache — DB'den yüklenir
 _closed_signals  = []   # RAM cache — DB'den yüklenir
 
 def load_signals():
-    """DB'den pending + son 100 closed sinyali + market history yükle."""
+    """DB'den closed sinyalleri yükle (istatistik için), pending'leri temiz başlat."""
     global _pending_signals, _closed_signals, _mkt_history, _rl_stats, _rl_last_signal
     try:
         db_init()
-        _pending_signals = db_load_pending()
+        _pending_signals = []  # Her oturumda temiz başla — eski pending'leri yükleme
         _closed_signals  = db_load_closed(limit=100)
         # Market history'yi DB'den yükle
         _mkt_history = db_load_market_history(symbol=SYMBOL, limit=120)
@@ -4095,7 +4095,7 @@ def background_loop():
                             else:
                                 # Şartlar net değil — mevcut sinyali koru, yeni sinyali ekleme
                                 continue
-                        new_sig = {**sig, "ts": datetime.now().strftime("%H:%M:%S"), "symbol": SYMBOL, "_wait_count": 0}
+                        new_sig = {**sig, "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "symbol": SYMBOL, "_wait_count": 0}
                         try:
                             db_id = db_insert_signal(new_sig)
                             new_sig["_db_id"] = db_id
