@@ -436,42 +436,32 @@ def _rl_update_q_table(state_hash, action_idx, reward, next_state_hash):
     _rl_q_table[state_hash][action_idx] = new_q
 
 def _rl_check_missed_rally(sig, df):
-    """
-    Ralli kaçırıldı mı kontrol et.
-    BU FONKSİYON artık _close_signal'da DEĞİL, sinyal ÜRETİM sirasinda
-    hard-block olmuş adaylar için çağrılır.
-    Return: True/False
-    """
-    if sig["dir"] == "LONG":
-        entry = sig.get("entry", df.iloc[-1]["close"])
-        current_price = df.iloc[-1]["close"]
-        if current_price > entry * 1.02:  # %2+ yükseldiyse
-            return True
-    else:
-        entry = sig.get("entry", df.iloc[-1]["close"])
-        current_price = df.iloc[-1]["close"]
-        if current_price < entry * 0.98:  # %2+ düştüyse
-            return True
-    return False
+    """Sinyal reddedildi, ama fiyat TP'ye ulaştı → iyi sinyali kaçırdık (-0.3 ceza)"""
+    try:
+        high = df.iloc[-1]["high"]
+        low  = df.iloc[-1]["low"]
+        if sig["dir"] == "LONG":
+            tp = sig.get("tp", sig.get("entry", high) * 1.02)
+            return high >= tp  # En yüksek TP'ye değdi mi?
+        else:
+            tp = sig.get("tp", sig.get("entry", low) * 0.98)
+            return low <= tp   # En düşük TP'ye değdi mi?
+    except:
+        return False
 
 def _rl_check_saved_fakeout(sig, df):
-    """
-    Fakeout kurtarıldı mı (block oldu ama fiyat ters gitti).
-    BU FONKSİYON artık _close_signal'da DEĞİL, sinyal ÜRETİM sirasinda
-    hard-block olmuş adaylar için çağrılır.
-    Return: True/False
-    """
-    if sig["dir"] == "LONG":
-        entry = sig.get("entry", df.iloc[-1]["close"])
-        current_price = df.iloc[-1]["close"]
-        if current_price < entry * 0.98:  # %2+ düştüyse → iyi block
-            return True
-    else:
-        entry = sig.get("entry", df.iloc[-1]["close"])
-        current_price = df.iloc[-1]["close"]
-        if current_price > entry * 1.02:  # %2+ yükseldiyse → iyi block
-            return True
-    return False
+    """Sinyal reddedildi, fiyat SL'e ulaştı → kötü sinyali doğru engelledik (+0.5 bonus)"""
+    try:
+        high = df.iloc[-1]["high"]
+        low  = df.iloc[-1]["low"]
+        if sig["dir"] == "LONG":
+            sl = sig.get("sl", sig.get("entry", low) * 0.99)
+            return low <= sl   # En düşük SL'e değdi mi?
+        else:
+            sl = sig.get("sl", sig.get("entry", high) * 1.01)
+            return high >= sl  # En yüksek SL'e değdi mi?
+    except:
+        return False
 
 def optimize_thresholds():
     """
@@ -3474,7 +3464,17 @@ def generate_signals(price, bid_walls, ask_walls, df, ticker=None):
         dist = (price - wp) / price
         if dist > PROXIMITY_PCT: continue
         sig = _build("LONG", wp, wv, dist)
-        if not sig["htf_blocked"] and sig["conf_total"] < min_conf: continue
+        if not sig["htf_blocked"] and sig["conf_total"] < min_conf:
+            # Reddedildi — iyi mi kötü mü kontrol et
+            if _rl_check_missed_rally(sig, df):
+                _rl_stats["missed_rallies"] += 1
+                _rl_stats["total_reward"] -= 0.3
+                print(f"[RL] 🚀 Missed Rally -0.3 (TP={sig['tp']}, high={df.iloc[-1]['high']})")
+            elif _rl_check_saved_fakeout(sig, df):
+                _rl_stats["saved_fakeouts"] += 1
+                _rl_stats["total_reward"] += 0.5
+                print(f"[RL] 🛡️ Saved Fakeout +0.5 (SL={sig['sl']}, low={df.iloc[-1]['low']})")
+            continue
         candidates.append(sig)
 
     for wp, wv in ask_walls:
@@ -3482,7 +3482,17 @@ def generate_signals(price, bid_walls, ask_walls, df, ticker=None):
         dist = (wp - price) / price
         if dist > PROXIMITY_PCT: continue
         sig = _build("SHORT", wp, wv, dist)
-        if not sig["htf_blocked"] and sig["conf_total"] < min_conf: continue
+        if not sig["htf_blocked"] and sig["conf_total"] < min_conf:
+            # Reddedildi — iyi mi kötü mü kontrol et
+            if _rl_check_missed_rally(sig, df):
+                _rl_stats["missed_rallies"] += 1
+                _rl_stats["total_reward"] -= 0.3
+                print(f"[RL] 🚀 Missed Rally -0.3 (TP={sig['tp']}, low={df.iloc[-1]['low']})")
+            elif _rl_check_saved_fakeout(sig, df):
+                _rl_stats["saved_fakeouts"] += 1
+                _rl_stats["total_reward"] += 0.5
+                print(f"[RL] 🛡️ Saved Fakeout +0.5 (SL={sig['sl']}, high={df.iloc[-1]['high']})")
+            continue
         candidates.append(sig)
 
     if not candidates:
@@ -3528,6 +3538,9 @@ def generate_signals(price, bid_walls, ask_walls, df, ticker=None):
     pending_dirs = {s["dir"] for s in _pending_signals if s.get("symbol") == SYMBOL}
     for sig in signals:
         sig["already_tracked"] = sig["dir"] in pending_dirs
+
+    # RL state'i DB'ye kaydet — missed_rallies ve saved_fakeouts dahil
+    db_save_rl_state()
 
     return signals
 
