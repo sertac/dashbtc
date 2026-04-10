@@ -1690,8 +1690,7 @@ def db_load_rl_state():
 _lock            = threading.Lock()
 _state           = {}
 _df_cache        = None  # Son DataFrame (RL reward hesaplaması için)
-_pending_signals = []   # RAM cache — DB'den yüklenir
-_closed_signals  = []   # RAM cache — DB'den yüklenir
+# RAM cache kaldırıldı — her şey DB'den okunur/yazılır
 
 def load_signals():
     """DB'den closed sinyalleri yükle (istatistik için), pending'leri DB'den yükle."""
