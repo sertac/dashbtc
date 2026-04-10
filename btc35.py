@@ -734,13 +734,14 @@ def telegram_handle_command(command):
         return True
     
     elif command == '/signals':
-        # Bekleyen sinyaller
-        if not _pending_signals:
+        # Bekleyen sinyaller — DB'den oku
+        pending = db_load_pending()
+        if not pending:
             telegram_send_message("⚪ <b>Bekleyen sinyal yok</b>")
             return True
 
         message = "📋 <b>BEKLEYEN SİNYALLER</b>\n\n"
-        for sig in _pending_signals[:5]:  # Max 5 sinyal
+        for sig in pending[:5]:  # Max 5 sinyal
             direction_emoji = "🟢" if sig["dir"] == "LONG" else "🔴"
 
             # Açılış zamanı ve geçen süre
@@ -1693,62 +1694,44 @@ _df_cache        = None  # Son DataFrame (RL reward hesaplaması için)
 # RAM cache kaldırıldı — her şey DB'den okunur/yazılır
 
 def load_signals():
-    """DB'den closed sinyalleri yükle (istatistik için), pending'leri DB'den yükle."""
-    global _pending_signals, _closed_signals, _mkt_history, _rl_stats, _rl_last_signal
+    """Sadece RL stats ve market history'yi yükle — sinyaller her zaman DB'den okunur."""
+    global _mkt_history, _rl_stats, _rl_last_signal
     try:
         db_init()
-        # Pending sinyalleri DB'den yükle — restart sonrası kaybolmasınlar
-        _pending_signals = db_load_pending()
-        _closed_signals  = db_load_closed(limit=100)
-        # Market history'yi DB'den yükle
         _mkt_history = db_load_market_history(symbol=SYMBOL, limit=120)
-        for s in _pending_signals + _closed_signals:
-            if "symbol" not in s: s["symbol"] = SYMBOL
         
-        # RL stats'i DB'den yükle (mevcut kapalı sinyalleri say)
-        closed_for_rl = [s for s in _closed_signals if s.get("outcome") in ["WIN","LOSS"]]
+        # RL stats — DB'den hesapla
+        closed = db_load_closed(limit=1000)
+        closed_for_rl = [s for s in closed if s.get("outcome") in ["WIN","LOSS"]]
         _rl_stats["wins"] = sum(1 for s in closed_for_rl if s.get("outcome")=="WIN")
         _rl_stats["losses"] = sum(1 for s in closed_for_rl if s.get("outcome")=="LOSS")
         _rl_stats["signals_closed"] = len(closed_for_rl)
         _rl_stats["total_reward"] = _rl_stats["wins"] - _rl_stats["losses"]
         
-        # _rl_last_signal'ı DB'den yükle (son kapanan sinyal)
         if closed_for_rl:
-            last_closed = max(closed_for_rl, key=lambda x: x.get("id", 0))
+            last = max(closed_for_rl, key=lambda x: x.get("id", 0))
             _rl_last_signal = {
-                "outcome": last_closed.get("outcome"),
-                "dir": last_closed.get("dir"),
-                "entry": last_closed.get("entry"),
-                "tp": last_closed.get("tp"),
-                "sl": last_closed.get("sl"),
-                "conf_total": last_closed.get("conf_total", 0),
-                "htf_blocked": last_closed.get("htf_blocked", False),
-                "_rl_state": None,  # State bilinmiyor, ilk optimizasyonda hesaplanacak
-                "_rl_action_idx": _rl_current_action_idx,
+                "outcome": last.get("outcome"), "dir": last.get("dir"),
+                "entry": last.get("entry"), "tp": last.get("tp"), "sl": last.get("sl"),
+                "conf_total": last.get("conf_total", 0),
+                "htf_blocked": last.get("htf_blocked", False),
+                "_rl_state": None, "_rl_action_idx": _rl_current_action_idx,
             }
-            print(f"[RL] Son sinyal: {last_closed.get('dir')} {last_closed.get('outcome')} @ {last_closed.get('entry')}")
         
-        print(f"[DB] Yüklendi: {len(_pending_signals)} bekleyen, {len(_closed_signals)} kapalı, {len(_mkt_history)} market history")
-
-        # RL state'i DB'den yükle (thresholds, Q-table, stats)
+        print(f"[DB] Yüklendi: {len(closed)} kapalı, {len(_mkt_history)} mkt history")
+        
+        # RL state DB'den yükle
         db_load_rl_state()
-        print(f"[RL] Yüklendi: {_rl_stats['wins']}W/{_rl_stats['losses']}L, Reward={_rl_stats['total_reward']:+.1f}, Q-states={len(_rl_q_table)}, initialized={_rl_initialized}")
+        print(f"[RL] {_rl_stats['wins']}W/{_rl_stats['losses']}L, Reward={_rl_stats['total_reward']:+.1f}")
         
-        # İlk optimizasyonu kontrol et (eğer 5+ sinyal varsa)
         if _rl_stats["signals_closed"] >= _rl_config["min_signals"]:
-            print(f"[RL] İlk optimizasyon tetikleniyor... ({_rl_stats['signals_closed']} sinyal)")
             try:
                 optimize_thresholds()
-                # Thresholdlar değiştiyse SADECE yeni sinyaller için kullan
-                # Pending sinyaller DB'den yüklendi - onları temizleme!
-                print(f"[RL] Pending sinyaller korunuyor ({len(_pending_signals)} adet)")
             except Exception as e:
                 print(f"[RL HATA] Optimizasyon: {e}")
-                import traceback
-                traceback.print_exc()
     except Exception as e:
-        print(f"[DB HATA] Yükleme: {e}")
-        _pending_signals = []; _closed_signals = []; _mkt_history = []
+        print(f"[DB HATA] {e}")
+        _mkt_history = []
 
 def save_signals():
     """Artık DB'ye yazılıyor — bu fonksiyon geriye uyumluluk için kalıyor."""
@@ -3585,7 +3568,8 @@ def generate_signals(price, bid_walls, ask_walls, df, ticker=None):
     signals.sort(key=lambda x: (x["htf_blocked"], -x["score"]))
 
     # Pending'de zaten takip edilen yönleri işaretle
-    pending_dirs = {s["dir"] for s in _pending_signals if s.get("symbol") == SYMBOL}
+    pending = db_load_pending()
+    pending_dirs = {s["dir"] for s in pending if s.get("symbol") == SYMBOL}
     for sig in signals:
         sig["already_tracked"] = sig["dir"] in pending_dirs
 
@@ -3596,27 +3580,21 @@ def generate_signals(price, bid_walls, ask_walls, df, ticker=None):
 
 
 def _close_signal(sig, outcome, net_pnl_pct, net_pnl_usd, close_ts, exit_price=None, close_reason=None):
-    """
-    Sinyali kapat — HEM DB'ye yaz HEM RAM cache'i güncelle.
-    ÖNEMLİ: DB yazması senkron yapılmalı ki hemen sonra okunabilsin.
-    """
-    global _closed_signals
+    """Sinyali kapat — sadece DB'ye yaz."""
     duration_min = sig.get("_duration_override")
     if duration_min is None:
         try:
             open_ts_str = sig.get("ts", "")
-            # Eğer tam datetime varsa (YYYY-MM-DD HH:MM:SS)
             if len(open_ts_str) >= 19:
                 open_dt = datetime.strptime(open_ts_str[:19], "%Y-%m-%d %H:%M:%S")
                 close_dt = datetime.strptime(close_ts[:19], "%Y-%m-%d %H:%M:%S")
                 duration_min = max(0, int((close_dt - open_dt).total_seconds() / 60))
             else:
-                # Sadece saat (HH:MM:SS) — gece yarısı taşmasını handle et
                 open_dt = datetime.strptime(open_ts_str[:8], "%H:%M:%S")
                 close_dt = datetime.strptime(close_ts[:8], "%H:%M:%S")
                 diff_seconds = (close_dt - open_dt).total_seconds()
                 if diff_seconds < 0:
-                    diff_seconds += 86400  # Gece yarısı geçti
+                    diff_seconds += 86400
                 duration_min = max(0, int(diff_seconds / 60))
         except Exception:
             duration_min = None
@@ -3625,8 +3603,6 @@ def _close_signal(sig, outcome, net_pnl_pct, net_pnl_usd, close_ts, exit_price=N
               "net_pnl_usd": net_pnl_usd, "close_ts": close_ts,
               "exit_price": exit_price, "duration_min": duration_min,
               "close_reason": close_reason}
-    _closed_signals.append(closed)
-    _closed_signals = _closed_signals[-100:]
 
     db_id = sig.get("_db_id") or sig.get("id")
     if db_id:
@@ -3751,59 +3727,50 @@ def _close_signal(sig, outcome, net_pnl_pct, net_pnl_usd, close_ts, exit_price=N
     db_save_rl_state()
 
 def check_pending_signals(df):
-    """
-    Her döngüde bekleyen sinyalleri kontrol et.
-    Son 5 mumu kontrol et (TP/SL wick'e değdi mi?)
-    """
-    global _pending_signals
-    still_pending = []
+    """Her döngüde bekleyen sinyalleri DB'den oku ve kontrol et."""
     rt     = 2 * COMMISSION
     now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # DB'den pending sinyalleri oku
+    pending = db_load_pending()
+    still_pending = []
 
     # Son 5 mumu kontrol et (wick TP/SL'e değdi mi?)
     last_candles = df.iloc[-5:] if len(df) >= 5 else df
 
-    for sig in _pending_signals:
+    for sig in pending:
         # Yeni sinyalleri ilk 5 döngü kontrol etme (75 saniye)
         wait_count = sig.get("_wait_count", 0)
         if wait_count < 5:
-            sig["_wait_count"] = wait_count + 1
+            # DB'de _wait_count güncelle
+            db_id = sig.get("_db_id") or sig.get("id")
+            if db_id:
+                def _fn(conn, rid, wc, ts):
+                    conn.execute("UPDATE signals SET checks_json=?, open_ts=? WHERE id=?",
+                                (json.dumps([{"label":"waiting","wc":wc}]), ts, rid))
+                    conn.commit()
+                try:
+                    _db_write(_fn, db_id, wait_count + 1, now_ts, wait=False)
+                except: pass
             still_pending.append(sig)
             continue
 
         is_long = sig["dir"] == "LONG"
         tp_hit = False
         sl_hit = False
-        
-        # Son 5 mumu kontrol et - high/low TP/SL'e değdi mi?
         hit_candle = None
+
         for _, candle in last_candles.iterrows():
             if is_long:
-                if candle["high"] >= sig["tp"]:
-                    tp_hit = True
-                    hit_candle = candle
-                if candle["low"] <= sig["sl"]:
-                    sl_hit = True
-                    hit_candle = candle
+                if candle["high"] >= sig["tp"]: tp_hit = True; hit_candle = candle
+                if candle["low"] <= sig["sl"]: sl_hit = True; hit_candle = candle
             else:
-                if candle["low"] <= sig["tp"]:
-                    tp_hit = True
-                    hit_candle = candle
-                if candle["high"] >= sig["sl"]:
-                    sl_hit = True
-                    hit_candle = candle
-        
-        # DEBUG: SL/TP vuruşunu logla
+                if candle["low"] <= sig["tp"]: tp_hit = True; hit_candle = candle
+                if candle["high"] >= sig["sl"]: sl_hit = True; hit_candle = candle
+
         if tp_hit or sl_hit:
-            print(f"[DEBUG] {sig['dir']} TP/SL HIT! Entry={sig['entry']} TP={sig['tp']} SL={sig['sl']}")
-            print(f"        Hit candle: H={hit_candle['high']:.2f} L={hit_candle['low']:.2f}")
-            print(f"        tp_hit={tp_hit}, sl_hit={sl_hit}")
-        
-        if tp_hit or sl_hit:
-            # En son mumun kapanışına göre karar ver
             last = df.iloc[-1]
             if tp_hit and sl_hit:
-                # Aynı mumda ikisi de vurdu — kapanışa göre karar ver
                 outcome = "WIN"  if (is_long and last["close"] > sig["entry"]) or \
                                     (not is_long and last["close"] < sig["entry"]) else "LOSS"
             elif tp_hit:
@@ -3811,8 +3778,6 @@ def check_pending_signals(df):
             else:
                 outcome = "LOSS"
 
-            # PnL hesapla — signal'daki orijinal TP/SL seviyelerinden
-            # Global TP_PCT/SL_PCT RL tarafından değişebilir, sig['tp']/'sl' gerçek değerlerdir
             if outcome == "WIN":
                 actual_pnl = (sig["tp"] - sig["entry"]) / sig["entry"] if is_long else (sig["entry"] - sig["tp"]) / sig["entry"]
                 net_pnl_pct = round((actual_pnl - rt) * 100, 2)
@@ -3827,7 +3792,8 @@ def check_pending_signals(df):
         else:
             still_pending.append(sig)
 
-    _pending_signals = still_pending
+    # DB'deki status'ları güncelle — RAM'de tutmuyoruz
+    # still_pending DB'den tekrar okunacak bir sonraki döngüde
 
 
 
@@ -3838,7 +3804,7 @@ def calc_win_stats(symbol=None):
 
 
 def background_loop():
-    global _pending_signals, _htf_cache, _htf_last_fetch, _mkt_cache, _mkt_last_fetch
+    global _htf_cache, _htf_last_fetch, _mkt_cache, _mkt_last_fetch
     global _news_cache, _news_last_fetch, _tweet_cache, _tweet_last_fetch
     global _eth_staking_cache, _eth_staking_last_fetch
     global _eth_onchain_cache, _eth_onchain_last_fetch
@@ -4226,8 +4192,9 @@ def background_loop():
                 if df is not None and price > 0:
                     signals = generate_signals(price, bid_walls, ask_walls, df, ticker=ticker)
 
-                    # HTF Reversal Flag
-                    for sig in _pending_signals:
+                    # HTF Reversal Flag — DB'den oku
+                    pending = db_load_pending()
+                    for sig in pending:
                         if sig.get("symbol") != SYMBOL:
                             continue
                         htf_reversed = (
@@ -4239,7 +4206,9 @@ def background_loop():
                     for sig in signals:
                         if sig["htf_blocked"]:
                             continue
-                        open_for_symbol = [p for p in _pending_signals if p.get("symbol") == SYMBOL]
+                        # DB'den pending sinyalleri oku
+                        pending = db_load_pending()
+                        open_for_symbol = [p for p in pending if p.get("symbol") == SYMBOL]
                         same_dir_open = [p for p in open_for_symbol if p["dir"] == sig["dir"]]
                         opp_dir_open = [p for p in open_for_symbol if p["dir"] != sig["dir"]]
                         if same_dir_open:
@@ -4266,7 +4235,13 @@ def background_loop():
                                 reason = "HTF ters döndü" if htf_reversed else f"güçlü karşı sinyal"
                                 now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 _close_signal(existing, outcome, net_pct, net_usd, now_ts, exit_price=price, close_reason=f"↩ Reverse — {reason}")
-                                _pending_signals = [p for p in _pending_signals if not (p.get("symbol")==SYMBOL and p["dir"]==existing["dir"])]
+                                # DB'den sil
+                                existing_id = existing.get("_db_id") or existing.get("id")
+                                if existing_id:
+                                    def _fn(conn, rid):
+                                        conn.execute("DELETE FROM signals WHERE id=?", (rid,))
+                                        conn.commit()
+                                    _db_write(_fn, existing_id, wait=False)
                                 print(f"[REVERSE] {existing['dir']} @ {existing['entry']} → {sig['dir']} | {reason} | P&L:{net_pct}%")
                                 continue
                             else:
@@ -4276,11 +4251,10 @@ def background_loop():
                         try:
                             db_id = db_insert_signal(new_sig)
                             new_sig["_db_id"] = db_id
+                            print(f"[SİNYAL] Yeni {new_sig['dir']} #{db_id} eklendi — entry={new_sig['entry']}")
+                            telegram_signal_opened(new_sig)
                         except Exception as e:
                             print(f"[DB HATA] insert: {e}")
-                            new_sig["_db_id"] = None
-                        _pending_signals.append(new_sig)
-                        telegram_signal_opened(new_sig)
             except Exception as e:
                 print(f"[BG LOOP SİNYAL HATA] {e}", flush=True)
                 import traceback
@@ -4312,8 +4286,11 @@ def background_loop():
                     eth_onchain_trend = db_get_eth_onchain_trend(SYMBOL)
                 except: eth_onchain_trend = {}
                 try:
-                    closed_from_db = _closed_signals[-20:] if _closed_signals else db_load_closed(symbol=SYMBOL, limit=20)
+                    closed_from_db = db_load_closed(symbol=SYMBOL, limit=20)
                 except: closed_from_db = []
+                try:
+                    pending_from_db = db_load_pending()
+                except: pending_from_db = []
 
                 new_state = {
                     "ts": datetime.now().strftime("%H:%M:%S"),
@@ -4342,7 +4319,7 @@ def background_loop():
                     "predictions": predictions,
                     "kalman_history": _kalman_price_history[-60:] if '_kalman_price_history' in globals() else [],
                     "pending": [{k: v for k, v in s.items() if k not in ("checks", "entry_candle_idx", "waited_count", "_duration_override", "_db_id")}
-                                for s in _pending_signals[-10:] if s.get("symbol") == SYMBOL],
+                                for s in pending_from_db[-10:] if s.get("symbol") == SYMBOL],
                     "closed": closed_from_db,
                     "stats": stats,
                     "mkt_history": list(_mkt_history),
@@ -7035,7 +7012,7 @@ def health_check():
         "status": "ok",
         "symbol": SYMBOL,
         "timestamp": datetime.now().strftime("%H:%M:%S"),
-        "pending_signals": len([s for s in _pending_signals if s.get("symbol") == SYMBOL]),
+        "pending_signals": len(db_load_pending()),
     })
 
 @app.route("/debug_state")
@@ -7130,8 +7107,8 @@ def debug_status():
         "exchange_test": exchange_test,
         "mkt_history_len": len(_mkt_history),
         "mkt_history_id": id(_mkt_history),
-        "pending_signals": len(_pending_signals),
-        "closed_signals": len(_closed_signals),
+        "pending_signals": len(db_load_pending()),
+        "closed_signals": len(db_load_closed(limit=100)),
         "mkt_cache": bool(_mkt_cache.get("ts")),
         "mkt_cache_data": {k: v for k, v in _mkt_cache.items() if k != "ts"},
         "htf_cache": bool(_htf_cache.get("ts")),
@@ -7167,7 +7144,6 @@ def db_stats_endpoint():
 
 @app.route("/clear_signals", methods=["POST"])
 def clear_signals():
-    global _pending_signals, _closed_signals
     data   = flask_request.get_json(silent=True) or {}
     mode   = data.get("mode", "all")
     symbol = data.get("symbol")
@@ -7183,13 +7159,6 @@ def clear_signals():
         return conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
 
     remaining = _db_write(_fn, mode, symbol)
-
-    if mode in ("all", "pending"):
-        _pending_signals = ([s for s in _pending_signals if s.get("symbol")!=symbol]
-                            if symbol else [])
-    if mode in ("all", "closed"):
-        _closed_signals  = ([s for s in _closed_signals  if s.get("symbol")!=symbol]
-                            if symbol else [])
 
     print(f"[SİL] mode={mode} symbol={symbol or 'tümü'} → {remaining} kayıt kaldı")
     return {"ok": True, "remaining": remaining}
