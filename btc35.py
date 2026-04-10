@@ -1694,11 +1694,12 @@ _pending_signals = []   # RAM cache — DB'den yüklenir
 _closed_signals  = []   # RAM cache — DB'den yüklenir
 
 def load_signals():
-    """DB'den closed sinyalleri yükle (istatistik için), pending'leri temiz başlat."""
+    """DB'den closed sinyalleri yükle (istatistik için), pending'leri DB'den yükle."""
     global _pending_signals, _closed_signals, _mkt_history, _rl_stats, _rl_last_signal
     try:
         db_init()
-        _pending_signals = []  # Her oturumda temiz başla — eski pending'leri yükleme
+        # Pending sinyalleri DB'den yükle — restart sonrası kaybolmasınlar
+        _pending_signals = db_load_pending()
         _closed_signals  = db_load_closed(limit=100)
         # Market history'yi DB'den yükle
         _mkt_history = db_load_market_history(symbol=SYMBOL, limit=120)
