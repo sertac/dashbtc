@@ -486,31 +486,54 @@ def optimize_thresholds():
 
         # ── STUCK DETECTION: Uzun süredir sinyal üretilmiyorsa eşikleri gevşet ──
         # Eğer reward çok negatifse VE sinyal üretilmiyorsa → aşırı muhafazakar
+        stuck_relaxed = False
         if _rl_stats["total_reward"] < -5.0:
             # Eşikleri kademeli gevşet
             old_ls_long = _rl_thresholds.get("ls_crowd_long", 2.0)
+            old_ls_short = _rl_thresholds.get("ls_crowd_short", 0.5)
             old_min_score = _rl_thresholds.get("min_score", 40)
+            old_rr = _rl_thresholds.get("rr_ratio", 2.0)
 
-            # Minimum seviyelere clamp et
-            new_ls_long = max(1.5, old_ls_long - 0.5)
-            new_min_score = max(35, old_min_score - 5)
+            # Daha agresif gevşetme
+            new_ls_long = max(1.5, old_ls_long - 1.0)
+            new_ls_short = min(0.8, old_ls_short + 0.2)
+            new_min_score = max(35, old_min_score - 10)
+            new_rr = max(2.0, old_rr - 0.5)
 
             if new_ls_long != old_ls_long or new_min_score != old_min_score:
                 _rl_thresholds["ls_crowd_long"] = new_ls_long
+                _rl_thresholds["ls_crowd_short"] = new_ls_short
                 _rl_thresholds["min_score"] = new_min_score
+                _rl_thresholds["rr_ratio"] = new_rr
+                _rl_thresholds["tp_pct"] = 0.02
+                _rl_thresholds["sl_pct"] = 0.01
                 LS_CROWD_LONG = new_ls_long
+                LS_CROWD_SHORT = new_ls_short
                 MIN_SCORE = new_min_score
-                print(f"[RL STUCK] Reward çok düşük ({_rl_stats['total_reward']:+.1f}) → eşikler gevşetildi: "
-                      f"ls_long={new_ls_long}, min_score={new_min_score}")
+                TP_PCT = 0.02
+                SL_PCT = 0.01
+                print(f"[RL STUCK] Reward çok düşük ({_rl_stats['total_reward']:+.1f}) → eşikler AGRESİF gevşetildi: "
+                      f"ls_long={new_ls_long}, min_score={new_min_score}, rr={new_rr}")
 
                 _rl_threshold_history.append({
                     "ts": datetime.now().strftime("%H:%M:%S"),
-                    "changes": [f"ls_long: {old_ls_long} → {new_ls_long}", f"min_score: {old_min_score} → {new_min_score}"],
+                    "changes": [f"ls_long: {old_ls_long} → {new_ls_long}", f"min_score: {old_min_score} → {new_min_score}", f"rr: {old_rr} → {new_rr}"],
                     "reward": _rl_stats["total_reward"],
                     "w_l": f"{_rl_stats['wins']}/{_rl_stats['losses']}",
-                    "reason": "STUCK relief",
+                    "reason": "STUCK relief (aggressive)",
                 })
                 _rl_threshold_history = _rl_threshold_history[-5:]
+                stuck_relaxed = True
+
+        # Eğer stuck relaxation olduysa Q-table'ı sıfırla — eski öğrenme artık geçersiz
+        if stuck_relaxed:
+            _rl_q_table.clear()
+            _rl_stats["signals_closed"] = 0  # Counter'ı sıfırla
+            _rl_stats["wins"] = 0
+            _rl_stats["losses"] = 0
+            _rl_stats["total_reward"] = 0.0
+            _rl_initialized = False
+            print(f"[RL STUCK] Q-table ve stats sıfırlandı — temiz başlıyoruz")
 
         # Yeni state için Q-table güncelleme
         should_optimize = (_rl_stats["signals_closed"] % _rl_config["optimize_every"] == 0) or \
