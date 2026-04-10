@@ -6276,11 +6276,13 @@ function renderPending(d){
     const pct2sl = Math.abs((s.sl - s.entry) / s.entry * 100).toFixed(2);
     const pct2tp = Math.abs((s.tp - s.entry) / s.entry * 100).toFixed(2);
     
+    const openTs = s.ts || '';
     return`<div style="background:var(--bg3);border-radius:4px;padding:7px 10px;margin-bottom:4px;border-left:2px solid ${clr}">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
         <span class="badge pending">${s.dir}</span>
         <span style="color:${clr};font-size:11px;font-weight:600">$${fmt(s.entry)}</span>
-        <span style="font-size:9px;color:${confColor};margin-left:auto;cursor:help" title="${tooltip.replace(/"/g,'&quot;')}">${stars} <span style="font-size:8px">(${confTotal}/100)</span></span>
+        <span style="font-size:9px;color:${confColor};cursor:help" title="${tooltip.replace(/"/g,'&quot;')}">${stars}</span>
+        <span style="font-size:8px;color:var(--text-dim);margin-left:auto">${openTs ? '📥 '+openTs : ''}</span>
       </div>
       <div style="font-size:8px;color:var(--text-dim);margin-bottom:4px;display:flex;gap:8px;flex-wrap:wrap">
         <span style="color:${confColor}">${confGrade}</span>
