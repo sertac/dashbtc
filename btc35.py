@@ -526,14 +526,13 @@ def optimize_thresholds():
                 stuck_relaxed = True
 
         # Eğer stuck relaxation olduysa Q-table'ı sıfırla — eski öğrenme artık geçersiz
+        # AMA closed_signals ve win/loss history'yi koru!
         if stuck_relaxed:
             _rl_q_table.clear()
-            _rl_stats["signals_closed"] = 0  # Counter'ı sıfırla
-            _rl_stats["wins"] = 0
-            _rl_stats["losses"] = 0
-            _rl_stats["total_reward"] = 0.0
+            _rl_stats["signals_closed"] = 0  # Yeni döngü için sıfırla
+            # Win/loss/history'yi SIFIRLAMA — DB'den zaten yüklü!
             _rl_initialized = False
-            print(f"[RL STUCK] Q-table ve stats sıfırlandı — temiz başlıyoruz")
+            print(f"[RL STUCK] Q-table sıfırlandı — temiz başlıyoruz (win/loss history korundu)")
 
         # Yeni state için Q-table güncelleme
         should_optimize = (_rl_stats["signals_closed"] % _rl_config["optimize_every"] == 0) or \
