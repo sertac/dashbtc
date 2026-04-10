@@ -472,7 +472,7 @@ def optimize_thresholds():
     global _rl_current_action_idx, _rl_initialized, _rl_q_table
     global LS_CROWD_LONG, LS_CROWD_SHORT, TAKER_STRONG, MIN_SCORE, TP_PCT, SL_PCT
     global _rl_threshold_history  # Threshold değişim geçmişi
-    
+
     if not _rl_config["enabled"]:
         return
 
@@ -484,7 +484,35 @@ def optimize_thresholds():
         # Yeni state'i al
         current_state, state_details = _rl_get_state()
 
-        # Q-table'ı güncelle (her 5 sinyalde bir VEYA ilk optimizasyon)
+        # ── STUCK DETECTION: Uzun süredir sinyal üretilmiyorsa eşikleri gevşet ──
+        # Eğer reward çok negatifse VE sinyal üretilmiyorsa → aşırı muhafazakar
+        if _rl_stats["total_reward"] < -5.0:
+            # Eşikleri kademeli gevşet
+            old_ls_long = _rl_thresholds.get("ls_crowd_long", 2.0)
+            old_min_score = _rl_thresholds.get("min_score", 40)
+
+            # Minimum seviyelere clamp et
+            new_ls_long = max(1.5, old_ls_long - 0.5)
+            new_min_score = max(35, old_min_score - 5)
+
+            if new_ls_long != old_ls_long or new_min_score != old_min_score:
+                _rl_thresholds["ls_crowd_long"] = new_ls_long
+                _rl_thresholds["min_score"] = new_min_score
+                LS_CROWD_LONG = new_ls_long
+                MIN_SCORE = new_min_score
+                print(f"[RL STUCK] Reward çok düşük ({_rl_stats['total_reward']:+.1f}) → eşikler gevşetildi: "
+                      f"ls_long={new_ls_long}, min_score={new_min_score}")
+
+                _rl_threshold_history.append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "changes": [f"ls_long: {old_ls_long} → {new_ls_long}", f"min_score: {old_min_score} → {new_min_score}"],
+                    "reward": _rl_stats["total_reward"],
+                    "w_l": f"{_rl_stats['wins']}/{_rl_stats['losses']}",
+                    "reason": "STUCK relief",
+                })
+                _rl_threshold_history = _rl_threshold_history[-5:]
+
+        # Yeni state için Q-table güncelleme
         should_optimize = (_rl_stats["signals_closed"] % _rl_config["optimize_every"] == 0) or \
                           (not _rl_initialized and _rl_stats["signals_closed"] >= _rl_config["min_signals"])
         
