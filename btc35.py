@@ -4730,7 +4730,11 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
     <div class="chart-wrap" style="flex:1;display:flex;flex-direction:column">
       <div class="panel-title">5 Dakikalık Mum Grafiği</div>
       <div id="chart-container" style="flex:1;position:relative;min-height:200px;overflow:hidden">
+        <canvas id="gtrend-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:0.25"></canvas>
         <canvas id="price-chart" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+        <div id="gtrend-badge" style="position:absolute;top:6px;right:10px;font-size:8px;color:var(--cyan);background:rgba(0,0,0,.6);padding:2px 6px;border-radius:3px;pointer-events:none;display:none">
+          🔍 Google Trends
+        </div>
       </div>
     </div>
   </div>
@@ -4804,21 +4808,6 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
       <div id="kw-tags" style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px;flex-shrink:0"></div>
       <div id="tweet-list" style="overflow-y:auto;flex:1">
         <div style="color:var(--text-dim);font-size:10px;text-align:center;padding:16px 0">Bekleniyor…</div>
-      </div>
-    </div>
-    <!-- Google Trends -->
-    <div class="bottom-pane">
-      <div class="bottom-title">🔍 Google Trends
-        <span id="gtrend-sym" style="font-size:9px;color:var(--text-dim)"></span>
-        <span id="gtrend-status" style="font-size:8px;color:var(--text-dim);margin-left:4px">—</span>
-      </div>
-      <div style="position:relative;height:120px;background:rgba(0,0,0,.2);border-radius:4px;overflow:hidden" id="gtrend-chart-container">
-        <canvas id="gtrend-chart"></canvas>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:4px;font-size:8px;color:var(--text-dim)">
-        <span>🟢 <span id="gtrend-kw1">crypto</span></span>
-        <span>🔵 <span id="gtrend-kw2">price</span></span>
-        <span style="margin-left:auto">Son 12 ay — ABD</span>
       </div>
     </div>
     <!-- Akıllı Uyarılar -->
@@ -6879,74 +6868,70 @@ function renderFlashNews(d){
   itemsEl.innerHTML=`<span style="color:var(--purple);font-weight:700">📰 FLASH NEWS</span>${text}`;
 }
 
-// Google Trends Chart
+// Google Trends Overlay — mum grafiğinin ARKASINA çizilir
 async function renderGoogleTrends(){
   const sym = window._lastSymbol || 'ETH/USDT';
   const base = sym.split('/')[0];
-  const statusEl = document.getElementById('gtrend-status');
-  const symEl = document.getElementById('gtrend-sym');
-  const kw1El = document.getElementById('gtrend-kw1');
-  const kw2El = document.getElementById('gtrend-kw2');
-  const chartEl = document.getElementById('gtrend-chart');
-  
-  if(!chartEl) return;
-  if(symEl) symEl.textContent = base;
-  if(kw1El) kw1El.textContent = base + ' crypto';
-  if(kw2El) kw2El.textContent = base + ' price';
-  if(statusEl) statusEl.textContent = '⏳ Yükleniyor…';
+  const badgeEl = document.getElementById('gtrend-badge');
   
   try{
     const res = await fetch('/google_trends?symbol='+encodeURIComponent(sym));
     const data = await res.json();
     
     if(!data || !data.length){
-      if(statusEl) statusEl.textContent = '⚠️ Veri yok';
+      if(badgeEl) badgeEl.style.display = 'none';
       return;
     }
     
-    if(statusEl) statusEl.textContent = `✅ ${data.length} gün`;
+    if(badgeEl) badgeEl.style.display = 'block';
     
-    // Canvas çizimi
-    const container = document.getElementById('gtrend-chart-container');
-    const W = container.clientWidth || 280;
-    const H = 120;
-    chartEl.width = W;
-    chartEl.height = H;
-    const ctx = chartEl.getContext('2d');
-    ctx.clearRect(0, 0, W, H);
+    // Overlay canvas — mum grafiğinin arkasında
+    const overlay = document.getElementById('gtrend-overlay');
+    const container = document.getElementById('chart-container');
+    if(!overlay || !container) return;
+    
+    overlay.width = container.clientWidth;
+    overlay.height = container.clientHeight;
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
     
     const cryptoKey = base + '_crypto';
-    const priceKey = base + '_price';
     
-    // Max değerleri bul
+    // Son 14 günü al (mum grafiği ile daha uyumlu görünür)
+    const recent = data.slice(-14);
+    if(!recent.length) return;
+    
     let maxVal = 1;
-    data.forEach(d => {
-      maxVal = Math.max(maxVal, d[cryptoKey] || 0, d[priceKey] || 0);
+    recent.forEach(d => { maxVal = Math.max(maxVal, d[cryptoKey] || 0); });
+    
+    // Gradient arka plan — yüksek ilgi = üstte, düşük = altta
+    const W = overlay.width;
+    const H = overlay.height;
+    
+    recent.forEach((d, i) => {
+      const val = (d[cryptoKey] || 0) / maxVal;
+      const x = (i / (recent.length - 1)) * W;
+      const barW = W / recent.length;
+      
+      // Yüksek arama ilgisi = daha parlak cyan
+      const alpha = 0.15 + val * 0.35;
+      ctx.fillStyle = `rgba(0, 200, 224, ${alpha})`;
+      ctx.fillRect(x, 0, barW + 1, H);
     });
     
-    const pad = {l: 5, r: 5, t: 5, b: 5};
-    const chartW = W - pad.l - pad.r;
-    const chartH = H - pad.t - pad.b;
-    
-    // Çizgi çizme fonksiyonu
-    function drawLine(key, color){
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      data.forEach((d, i) => {
-        const x = pad.l + (i / (data.length - 1)) * chartW;
-        const y = pad.t + chartH - ((d[key] || 0) / maxVal) * chartH;
-        if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    }
-    
-    drawLine(cryptoKey, '#00d264');  // Yeşil
-    drawLine(priceKey, '#4a9eff');   // Mavi
+    // Çizgi
+    ctx.strokeStyle = 'rgba(0, 200, 224, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    recent.forEach((d, i) => {
+      const x = (i / (recent.length - 1)) * W;
+      const y = H - ((d[cryptoKey] || 0) / maxVal) * H;
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
     
   }catch(e){
-    if(statusEl) statusEl.textContent = '❌ Hata';
-    console.error('Google Trends:', e);
+    console.error('Google Trends overlay:', e);
   }
 }
 
