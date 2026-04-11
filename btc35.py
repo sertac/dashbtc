@@ -2283,24 +2283,24 @@ def _get(path, params=None, timeout=5):
     r=requests.get(BNFUT_BASE+path,params=params,timeout=timeout); r.raise_for_status(); return r.json()
 
 # ── PremiumIndex Cache — fetch_market_data + fetch_mark_index ortak kullansın ──
-_premium_cache = {"mark_price": 0, "index_price": 0, "funding_rate": 0, "ts": 0}
-_premium_ts = 0  # Son fetch zamanı (time.time())
-
-def _fetch_premiumIndex(sym="BTCUSDT"):
+def _fetch_premiumIndex(sym=None):
     """
     /fapi/v1/premiumIndex — markPrice, indexPrice, lastFundingRate tek çağrıda.
     60 saniye cache'le (fetch_market_data + fetch_mark_index ortak kullansın).
     """
+    if sym is None:
+        sym = SYMBOL.replace("/", "")
     global _premium_ts
     import time
     now = time.time()
-    if now - _premium_ts < 60 and _premium_cache["ts"] > 0:
+    if now - _premium_ts < 60 and _premium_cache["ts"] > 0 and _premium_cache.get("symbol") == sym:
         return _premium_cache
     try:
         data = _get("/fapi/v1/premiumIndex", {"symbol": sym})
         _premium_cache["mark_price"] = float(data.get("markPrice", 0))
         _premium_cache["index_price"] = float(data.get("indexPrice", 0))
         _premium_cache["funding_rate"] = float(data["lastFundingRate"])
+        _premium_cache["symbol"] = sym
         _premium_cache["ts"] = now
         _premium_ts = now
     except Exception as e:
@@ -2313,7 +2313,7 @@ def fetch_market_data():
     Önceki: seri ~2-3 saniye → Şimdi: ~0.5 saniye (en yavaş endpoint kadar).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    sym = "BTCUSDT"
+    sym = SYMBOL.replace("/", "")
     result = dict(_mkt_cache)
 
     # ── 4 bağımsız fetch fonksiyonu ──
