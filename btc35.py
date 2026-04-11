@@ -4806,6 +4806,21 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
         <div style="color:var(--text-dim);font-size:10px;text-align:center;padding:16px 0">Bekleniyor…</div>
       </div>
     </div>
+    <!-- Google Trends -->
+    <div class="bottom-pane">
+      <div class="bottom-title">🔍 Google Trends
+        <span id="gtrend-sym" style="font-size:9px;color:var(--text-dim)"></span>
+        <span id="gtrend-status" style="font-size:8px;color:var(--text-dim);margin-left:4px">—</span>
+      </div>
+      <div style="position:relative;height:120px;background:rgba(0,0,0,.2);border-radius:4px;overflow:hidden" id="gtrend-chart-container">
+        <canvas id="gtrend-chart"></canvas>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;font-size:8px;color:var(--text-dim)">
+        <span>🟢 <span id="gtrend-kw1">crypto</span></span>
+        <span>🔵 <span id="gtrend-kw2">price</span></span>
+        <span style="margin-left:auto">Son 12 ay — ABD</span>
+      </div>
+    </div>
     <!-- Akıllı Uyarılar -->
     <div class="bottom-pane">
       <div class="bottom-title" style="font-size:10px;font-weight:700;color:var(--text);margin-bottom:5px">🚨 Akıllı Uyarılar</div>
@@ -6716,6 +6731,7 @@ src.onmessage=e=>{
   try{renderFlashNews(d);}catch(e){console.error('flash_news',e);}
   try{renderPositions();}catch(e){console.error('positions',e);}
   try{renderWinRateChart(d);}catch(e){console.error('wr_chart',e);}
+  try{renderGoogleTrends();}catch(e){console.error('gtrends',e);}
   // Kalman geçmişini window'a kaydet (grafik için)
   if(d.kalman_history) window._kalman_price_history = d.kalman_history;
   // Predictions'ı window'a kaydet (grafik için)
@@ -6863,6 +6879,77 @@ function renderFlashNews(d){
   itemsEl.innerHTML=`<span style="color:var(--purple);font-weight:700">📰 FLASH NEWS</span>${text}`;
 }
 
+// Google Trends Chart
+async function renderGoogleTrends(){
+  const sym = window._lastSymbol || 'ETH/USDT';
+  const base = sym.split('/')[0];
+  const statusEl = document.getElementById('gtrend-status');
+  const symEl = document.getElementById('gtrend-sym');
+  const kw1El = document.getElementById('gtrend-kw1');
+  const kw2El = document.getElementById('gtrend-kw2');
+  const chartEl = document.getElementById('gtrend-chart');
+  
+  if(!chartEl) return;
+  if(symEl) symEl.textContent = base;
+  if(kw1El) kw1El.textContent = base + ' crypto';
+  if(kw2El) kw2El.textContent = base + ' price';
+  if(statusEl) statusEl.textContent = '⏳ Yükleniyor…';
+  
+  try{
+    const res = await fetch('/google_trends?symbol='+encodeURIComponent(sym));
+    const data = await res.json();
+    
+    if(!data || !data.length){
+      if(statusEl) statusEl.textContent = '⚠️ Veri yok';
+      return;
+    }
+    
+    if(statusEl) statusEl.textContent = `✅ ${data.length} gün`;
+    
+    // Canvas çizimi
+    const container = document.getElementById('gtrend-chart-container');
+    const W = container.clientWidth || 280;
+    const H = 120;
+    chartEl.width = W;
+    chartEl.height = H;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    
+    const cryptoKey = base + '_crypto';
+    const priceKey = base + '_price';
+    
+    // Max değerleri bul
+    let maxVal = 1;
+    data.forEach(d => {
+      maxVal = Math.max(maxVal, d[cryptoKey] || 0, d[priceKey] || 0);
+    });
+    
+    const pad = {l: 5, r: 5, t: 5, b: 5};
+    const chartW = W - pad.l - pad.r;
+    const chartH = H - pad.t - pad.b;
+    
+    // Çizgi çizme fonksiyonu
+    function drawLine(key, color){
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      data.forEach((d, i) => {
+        const x = pad.l + (i / (data.length - 1)) * chartW;
+        const y = pad.t + chartH - ((d[key] || 0) / maxVal) * chartH;
+        if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+    
+    drawLine(cryptoKey, '#00d264');  // Yeşil
+    drawLine(priceKey, '#4a9eff');   // Mavi
+    
+  }catch(e){
+    if(statusEl) statusEl.textContent = '❌ Hata';
+    console.error('Google Trends:', e);
+  }
+}
+
 // Win Rate Chart (Mini)
 async function renderWinRateChart(d){
   const chartEl=document.getElementById('wr-chart');
@@ -6928,7 +7015,14 @@ def stream():
             except Exception:
                 pass
 
-            with _lock: ts=_state.get("ts"); state=dict(_state)
+            with _lock:
+                ts=_state.get("ts")
+                state=dict(_state)
+                # ts yoksa oluştur — stream'in takılmaması için
+                if not ts:
+                    ts = datetime.now().strftime("%H:%M:%S")
+                    _state["ts"] = ts
+
             # Market history ekle
             state["mkt_history"] = _mkt_history
             # Spread durumu ekle
@@ -6959,13 +7053,66 @@ def stream():
             }
             # Her durumda state'i gönder (ts değişmese bile)
             if ts and ts!=last_ts:
-                yield f"data: {json.dumps(state, default=lambda o: bool(o) if isinstance(o, bool) else (o.item() if hasattr(o, 'item') else str(o)))}\n\n"
-                last_ts=ts
+                try:
+                    yield f"data: {json.dumps(state, default=lambda o: bool(o) if isinstance(o, bool) else (o.item() if hasattr(o, 'item') else str(o)))}\n\n"
+                    last_ts=ts
+                except Exception as e:
+                    print(f"[SSE] Serialize error: {e}")
+                    pass
             else:
-                # 5 saniyede bir heartbeat — frontend bağlantıyı koparmasın
+                # 2 saniyede bir heartbeat — frontend bağlantıyı koparmasın
                 yield f": heartbeat\n\n"
             time.sleep(1)
     return Response(event_stream(),mimetype="text/event-stream",headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
+
+# ── Google Trends — Sembol arama ilgisi ──────────────────────
+_google_trends_cache = {"data": [], "ts": 0, "symbol": ""}
+_google_trends_lock = threading.Lock()
+
+def fetch_google_trends(sym=None):
+    """Google Trends'ten arama ilgisi verisi çek."""
+    if sym is None:
+        sym = SYMBOL.replace("/", " ")
+    
+    with _google_trends_lock:
+        import time
+        now = time.time()
+        if _google_trends_cache["ts"] > 0 and now - _google_trends_cache["ts"] < 3600 and _google_trends_cache["symbol"] == sym:
+            return _google_trends_cache["data"]
+        
+        try:
+            from pytrends.request import TrendReq
+            pytrend = TrendReq(hl='en-US', tz=360, timeout=(10, 25))
+            
+            # Arama terimleri: sembol + "crypto" veya "price"
+            base = sym.split()[0]  # ETH veya BTC
+            keywords = [f"{base} crypto", f"{base} price"]
+            
+            pytrend.build_payload(keywords, timeframe='today 12-m', geo='US')
+            data = pytrend.interest_over_time()
+            
+            if data is not None and not data.empty:
+                result = []
+                for idx, row in data.iterrows():
+                    result.append({
+                        "date": idx.strftime("%Y-%m-%d"),
+                        base+"_crypto": int(row.get(keywords[0], 0)),
+                        base+"_price": int(row.get(keywords[1], 0)),
+                    })
+                _google_trends_cache["data"] = result
+                _google_trends_cache["ts"] = now
+                _google_trends_cache["symbol"] = sym
+                print(f"[TRENDS] {sym}: {len(result)} veri noktası")
+                return result
+        except Exception as e:
+            print(f"[TRENDS] Hata: {e}")
+        
+        return []
+
+@app.route("/google_trends")
+def google_trends_endpoint():
+    sym = flask_request.args.get("symbol", "").replace("/", " ") or None
+    return json.dumps(fetch_google_trends(sym))
 
 @app.route("/set_keywords",methods=["POST"])
 def set_keywords():
