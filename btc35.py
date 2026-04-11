@@ -4727,14 +4727,17 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
 
   <!-- Orta: Grafik -->
   <div class="chart-panel">
-    <div class="chart-wrap" style="flex:1;display:flex;flex-direction:column">
+    <div class="chart-wrap">
       <div class="panel-title">5 Dakikalık Mum Grafiği</div>
-      <div id="chart-container" style="flex:1;position:relative;min-height:200px;overflow:hidden">
-        <canvas id="gtrend-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:0.25"></canvas>
+      <div id="chart-container" style="flex:1;position:relative;overflow:hidden;min-height:200px">
         <canvas id="price-chart" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
-        <div id="gtrend-badge" style="position:absolute;top:6px;right:10px;font-size:8px;color:var(--cyan);background:rgba(0,0,0,.6);padding:2px 6px;border-radius:3px;pointer-events:none;display:none">
-          🔍 Google Trends
+      </div>
+      <!-- Google Trends panel (mum grafiğinin altında) -->
+      <div id="gtrend-panel" style="height:52px;background:var(--bg2);border-top:1px solid var(--border);padding:3px 8px;flex-shrink:0;display:none">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="font-size:8px;color:var(--cyan);font-weight:700">🔍 Google Trends (12 hafta)</span>
         </div>
+        <div style="position:relative;height:26px"><canvas id="gtrend-mini"></canvas></div>
       </div>
     </div>
   </div>
@@ -6868,70 +6871,58 @@ function renderFlashNews(d){
   itemsEl.innerHTML=`<span style="color:var(--purple);font-weight:700">📰 FLASH NEWS</span>${text}`;
 }
 
-// Google Trends Overlay — mum grafiğinin ARKASINA çizilir
+// Google Trends — HTML'deki panel kullanılır
 async function renderGoogleTrends(){
   const sym = window._lastSymbol || 'ETH/USDT';
   const base = sym.split('/')[0];
-  const badgeEl = document.getElementById('gtrend-badge');
+  const panel = document.getElementById('gtrend-panel');
+  if(!panel) return;
   
   try{
     const res = await fetch('/google_trends?symbol='+encodeURIComponent(sym));
     const data = await res.json();
-    
-    if(!data || !data.length){
-      if(badgeEl) badgeEl.style.display = 'none';
-      return;
-    }
-    
-    if(badgeEl) badgeEl.style.display = 'block';
-    
-    // Overlay canvas — mum grafiğinin arkasında
-    const overlay = document.getElementById('gtrend-overlay');
-    const container = document.getElementById('chart-container');
-    if(!overlay || !container) return;
-    
-    overlay.width = container.clientWidth;
-    overlay.height = container.clientHeight;
-    const ctx = overlay.getContext('2d');
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if(!data || !data.length) return;
     
     const cryptoKey = base + '_crypto';
-    
-    // Son 14 günü al (mum grafiği ile daha uyumlu görünür)
-    const recent = data.slice(-14);
+    const recent = data.slice(-12);
     if(!recent.length) return;
     
     let maxVal = 1;
     recent.forEach(d => { maxVal = Math.max(maxVal, d[cryptoKey] || 0); });
     
-    // Gradient arka plan — yüksek ilgi = üstte, düşük = altta
-    const W = overlay.width;
-    const H = overlay.height;
+    panel.style.display = 'block';
+    const canvas = document.getElementById('gtrend-mini');
+    if(!canvas) return;
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = 26;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const W = canvas.width;
+    const H = canvas.height;
+    const barW = W / recent.length;
     
     recent.forEach((d, i) => {
       const val = (d[cryptoKey] || 0) / maxVal;
-      const x = (i / (recent.length - 1)) * W;
-      const barW = W / recent.length;
-      
-      // Yüksek arama ilgisi = daha parlak cyan
-      const alpha = 0.15 + val * 0.35;
+      const barH = Math.max(1, val * (H - 2));
+      const alpha = 0.4 + val * 0.6;
       ctx.fillStyle = `rgba(0, 200, 224, ${alpha})`;
-      ctx.fillRect(x, 0, barW + 1, H);
+      ctx.fillRect(i * barW + 1, H - barH, barW - 2, barH);
     });
     
-    // Çizgi
-    ctx.strokeStyle = 'rgba(0, 200, 224, 0.6)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
     recent.forEach((d, i) => {
-      const x = (i / (recent.length - 1)) * W;
-      const y = H - ((d[cryptoKey] || 0) / maxVal) * H;
+      const x = i * barW + barW / 2;
+      const y = H - ((d[cryptoKey] || 0) / maxVal) * (H - 2) - 1;
       if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.stroke();
     
   }catch(e){
-    console.error('Google Trends overlay:', e);
+    console.error('Google Trends:', e);
   }
 }
 
@@ -7073,7 +7064,7 @@ def fetch_google_trends(sym=None):
             base = sym.split()[0]  # ETH veya BTC
             keywords = [f"{base} crypto", f"{base} price"]
             
-            pytrend.build_payload(keywords, timeframe='today 12-m', geo='US')
+            pytrend.build_payload(keywords, timeframe='today 3-m', geo='US')
             data = pytrend.interest_over_time()
             
             if data is not None and not data.empty:
