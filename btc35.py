@@ -2283,6 +2283,9 @@ def _get(path, params=None, timeout=5):
     r=requests.get(BNFUT_BASE+path,params=params,timeout=timeout); r.raise_for_status(); return r.json()
 
 # ── PremiumIndex Cache — fetch_market_data + fetch_mark_index ortak kullansın ──
+_premium_cache = {"mark_price": 0, "index_price": 0, "funding_rate": 0, "ts": 0, "symbol": ""}
+_premium_ts = 0  # Son fetch zamanı (time.time())
+
 def _fetch_premiumIndex(sym=None):
     """
     /fapi/v1/premiumIndex — markPrice, indexPrice, lastFundingRate tek çağrıda.
