@@ -6871,7 +6871,7 @@ function renderFlashNews(d){
   itemsEl.innerHTML=`<span style="color:var(--purple);font-weight:700">📰 FLASH NEWS</span>${text}`;
 }
 
-// Google Trends — HTML'deki panel kullanılır
+// Google Trends — HTML'deki panel kullanılır (saatlik veri)
 async function renderGoogleTrends(){
   const sym = window._lastSymbol || 'ETH/USDT';
   const base = sym.split('/')[0];
@@ -6884,7 +6884,8 @@ async function renderGoogleTrends(){
     if(!data || !data.length) return;
     
     const cryptoKey = base + '_crypto';
-    const recent = data.slice(-12);
+    // Son 48 saati al (7 günden gelen saatlik veriden)
+    const recent = data.slice(-48);
     if(!recent.length) return;
     
     let maxVal = 1;
@@ -6903,6 +6904,7 @@ async function renderGoogleTrends(){
     const H = canvas.height;
     const barW = W / recent.length;
     
+    // Çubuklar
     recent.forEach((d, i) => {
       const val = (d[cryptoKey] || 0) / maxVal;
       const barH = Math.max(1, val * (H - 2));
@@ -6911,6 +6913,7 @@ async function renderGoogleTrends(){
       ctx.fillRect(i * barW + 1, H - barH, barW - 2, barH);
     });
     
+    // Beyaz çizgi
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -7064,7 +7067,7 @@ def fetch_google_trends(sym=None):
             base = sym.split()[0]  # ETH veya BTC
             keywords = [f"{base} crypto", f"{base} price"]
             
-            pytrend.build_payload(keywords, timeframe='today 3-m', geo='US')
+            pytrend.build_payload(keywords, timeframe='now 7-d', geo='US')
             data = pytrend.interest_over_time()
             
             if data is not None and not data.empty:
