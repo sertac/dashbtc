@@ -4727,17 +4727,26 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
 
   <!-- Orta: Grafik -->
   <div class="chart-panel">
-    <div class="chart-wrap">
+    <div class="chart-wrap" style="flex:1;display:flex;flex-direction:column">
       <div class="panel-title">5 Dakikalık Mum Grafiği</div>
-      <div id="chart-container" style="flex:1;position:relative;overflow:hidden;min-height:200px">
-        <canvas id="price-chart" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+      <div id="chart-container" style="flex:1;position:relative;min-height:200px">
+        <canvas id="price-chart"></canvas>
       </div>
-      <!-- Google Trends panel (mum grafiğinin altında) -->
-      <div id="gtrend-panel" style="height:52px;background:var(--bg2);border-top:1px solid var(--border);padding:3px 8px;flex-shrink:0;display:none">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-          <span style="font-size:8px;color:var(--cyan);font-weight:700">🔍 Google Trends (12 hafta)</span>
+      <!-- Google Trends (mum grafiğinin altında, aynı X ekseni) -->
+      <div id="gtrend-daily-panel" style="height:56px;background:var(--bg2);border-top:1px solid var(--border);padding:4px 0 0;flex-shrink:0;display:none">
+        <div style="display:flex;align-items:center;gap:8px;padding:0 8px;margin-bottom:2px">
+          <span style="font-size:8px;color:var(--cyan);font-weight:700">📊 GTrends (günlük)</span>
+          <span id="gtrend-daily-info" style="font-size:8px;color:var(--text-dim)"></span>
         </div>
-        <div style="position:relative;height:26px"><canvas id="gtrend-mini"></canvas></div>
+        <div style="position:relative;height:36px"><canvas id="gtrend-daily-mini"></canvas></div>
+      </div>
+      <!-- Google Trends Saatlik -->
+      <div id="gtrend-hourly-panel" style="height:56px;background:var(--bg2);border-top:1px solid var(--border);padding:4px 0 0;flex-shrink:0;display:none">
+        <div style="display:flex;align-items:center;gap:8px;padding:0 8px;margin-bottom:2px">
+          <span style="font-size:8px;color:var(--amber);font-weight:700">⏱ GTrends (saatlik)</span>
+          <span id="gtrend-hourly-info" style="font-size:8px;color:var(--text-dim)"></span>
+        </div>
+        <div style="position:relative;height:36px"><canvas id="gtrend-hourly-mini"></canvas></div>
       </div>
     </div>
   </div>
@@ -6729,6 +6738,7 @@ src.onmessage=e=>{
   // Predictions'ı window'a kaydet (grafik için)
   if(d.predictions)window._predictions=d.predictions;
   try{if(d.candles&&d.candles.length)initChart(d.candles);}catch(e){console.error('chart',e);}
+  try{renderGoogleTrends();}catch(e){console.error('gtrends',e);}
   const dot=document.getElementById('dot');if(dot){dot.style.background='var(--green)';dot.style.boxShadow='0 0 6px var(--green)';}
 };
 src.onerror=()=>{const dot=document.getElementById('dot');if(dot){dot.style.background='var(--red)';dot.style.boxShadow='0 0 6px var(--red)';}};
@@ -6871,61 +6881,85 @@ function renderFlashNews(d){
   itemsEl.innerHTML=`<span style="color:var(--purple);font-weight:700">📰 FLASH NEWS</span>${text}`;
 }
 
-// Google Trends — HTML'deki panel kullanılır (saatlik veri)
+// Google Trends — günlük + saatlik panel
 async function renderGoogleTrends(){
   const sym = window._lastSymbol || 'ETH/USDT';
-  const base = sym.split('/')[0];
-  const panel = document.getElementById('gtrend-panel');
+  renderGTrendPanel('daily', sym, 'gtrend-daily-panel', 'gtrend-daily-info', 'gtrend-daily-mini');
+  renderGTrendPanel('hourly', sym, 'gtrend-hourly-panel', 'gtrend-hourly-info', 'gtrend-hourly-mini');
+}
+
+async function renderGTrendPanel(period, sym, panelId, infoId, canvasId){
+  const panel = document.getElementById(panelId);
   if(!panel) return;
-  
+
   try{
-    const res = await fetch('/google_trends?symbol='+encodeURIComponent(sym));
+    const res = await fetch(`/google_trends?symbol=${encodeURIComponent(sym)}&period=${period}`);
     const data = await res.json();
-    if(!data || !data.length) return;
-    
-    const cryptoKey = base + '_crypto';
-    // Son 48 saati al (7 günden gelen saatlik veriden)
-    const recent = data.slice(-48);
-    if(!recent.length) return;
-    
+    if(!data || data.length < 5){ panel.style.display='none'; return; }
+
+    const key = 'total';
+    const isHourly = period === 'hourly';
+    const recent = isHourly ? data.slice(-24) : data.slice(-30);
+    if(!recent.length){ panel.style.display='none'; return; }
+
     let maxVal = 1;
-    recent.forEach(d => { maxVal = Math.max(maxVal, d[cryptoKey] || 0); });
-    
-    panel.style.display = 'block';
-    const canvas = document.getElementById('gtrend-mini');
+    recent.forEach(d => { maxVal = Math.max(maxVal, d[key] || 0); });
+
+    const avg = recent.reduce((s, d) => s + (d[key] || 0), 0) / recent.length;
+    const today = recent[recent.length - 1][key] || 0;
+    const level = maxVal >= 80 ? 'YÜKSEK 🔥' : maxVal >= 40 ? 'NORMAL 📊' : 'DÜŞÜK 💤';
+    const firstStr = recent[0].date || '';
+    const lastStr = recent[recent.length-1].date || '';
+
+    document.getElementById(infoId).textContent = `${recent.length} ${isHourly ? 'saat' : 'gün'} | Max: ${maxVal} | Ort: ${Math.round(avg)} | ${level}`;
+
+    const canvas = document.getElementById(canvasId);
     if(!canvas) return;
     const container = canvas.parentElement;
     canvas.width = container.clientWidth;
-    canvas.height = 26;
+    canvas.height = 36;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    const W = canvas.width;
-    const H = canvas.height;
-    const barW = W / recent.length;
-    
-    // Çubuklar
+
+    const PL=6, PR=66;
+    const chartW = canvas.width - PL - PR;
+    const H = canvas.height - 12;
+    const barW = chartW / recent.length;
+
     recent.forEach((d, i) => {
-      const val = (d[cryptoKey] || 0) / maxVal;
-      const barH = Math.max(1, val * (H - 2));
-      const alpha = 0.4 + val * 0.6;
-      ctx.fillStyle = `rgba(0, 200, 224, ${alpha})`;
-      ctx.fillRect(i * barW + 1, H - barH, barW - 2, barH);
+      const val = (d[key] || 0) / maxVal;
+      if(val < 0.02) return;
+      const x = PL + i * barW;
+      const barH = Math.max(1, val * H);
+      const alpha = 0.3 + val * 0.7;
+      ctx.fillStyle = isHourly ? `rgba(240, 165, 0, ${alpha})` : `rgba(0, 200, 224, ${alpha})`;
+      ctx.fillRect(x, H - barH, barW - 1, barH);
     });
-    
-    // Beyaz çizgi
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    recent.forEach((d, i) => {
-      const x = i * barW + barW / 2;
-      const y = H - ((d[cryptoKey] || 0) / maxVal) * (H - 2) - 1;
-      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    
+
+    ctx.fillStyle = 'rgba(200,216,232,0.7)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    if(recent.length > 0){
+      const fd = recent[0].date;
+      ctx.fillText(isHourly ? fd.slice(11,16) : fd.slice(5), PL, H + 10);
+    }
+    if(recent.length > 1){
+      const midIdx = Math.floor(recent.length / 2);
+      ctx.textAlign = 'center';
+      const md = recent[midIdx].date;
+      ctx.fillText(isHourly ? md.slice(11,16) : md.slice(5), PL + midIdx * barW, H + 10);
+    }
+    if(recent.length > 0){
+      const ld = recent[recent.length-1].date;
+      ctx.textAlign = 'right';
+      ctx.fillText(isHourly ? 'şimdi' : ld.slice(5), PL + chartW, H + 10);
+    }
+
+    panel.style.display = 'block';
+
   }catch(e){
-    console.error('Google Trends:', e);
+    console.error(`GTrends ${period}:`, e);
+    panel.style.display = 'none';
   }
 }
 
@@ -7049,48 +7083,111 @@ _google_trends_cache = {"data": [], "ts": 0, "symbol": ""}
 _google_trends_lock = threading.Lock()
 
 def fetch_google_trends(sym=None):
-    """Google Trends'ten arama ilgisi verisi çek."""
+    """Google Trends'ten arama ilgisi verisi çek — related_queries ile otomatik kelime bulma."""
     if sym is None:
         sym = SYMBOL.replace("/", " ")
-    
+
     with _google_trends_lock:
         import time
         now = time.time()
         if _google_trends_cache["ts"] > 0 and now - _google_trends_cache["ts"] < 3600 and _google_trends_cache["symbol"] == sym:
             return _google_trends_cache["data"]
-        
+
         try:
             from pytrends.request import TrendReq
             pytrend = TrendReq(hl='en-US', tz=360, timeout=(10, 25))
-            
-            # Arama terimleri: sembol + "crypto" veya "price"
+
+            # Base kelime
             base = sym.split()[0]  # ETH veya BTC
-            keywords = [f"{base} crypto", f"{base} price"]
             
-            pytrend.build_payload(keywords, timeframe='now 7-d', geo='US')
+            # Related queries'den en popüler kelimeleri bul
+            related_keywords = []
+            try:
+                pytrend.build_payload([base], timeframe='today 3-m', geo='US')
+                related = pytrend.related_queries()
+                
+                # "top" queries'leri al
+                if base in related and related[base].get('top') is not None:
+                    top_queries = related[base]['top'].head(8)['query'].tolist()
+                    related_keywords = [base] + [q for q in top_queries if q != base]
+                    print(f"[TRENDS] Related queries for '{base}': {related_keywords}")
+            except Exception as e:
+                print(f"[TRENDS] Related queries error: {e}, using fallback")
+            
+            # Fallback
+            if not related_keywords:
+                if base == "BTC":
+                    related_keywords = ["bitcoin", "bitcoin price", "btc", "btc price", "bitcoin crypto"]
+                elif base == "ETH":
+                    related_keywords = ["ethereum", "ethereum price", "eth", "eth price", "ethereum crypto"]
+                else:
+                    related_keywords = [base, f"{base} price", f"{base} crypto"]
+            
+            # İlgi verisini çek (tüm kelimelerin toplamı)
+            pytrend.build_payload(related_keywords[:5], timeframe='today 3-m', geo='US')  # Max 5 kelime
             data = pytrend.interest_over_time()
             
             if data is not None and not data.empty:
                 result = []
                 for idx, row in data.iterrows():
+                    # Tüm kelimelerin toplamı
+                    total = 0
+                    for kw in related_keywords[:5]:
+                        total += int(row.get(kw, 0) or 0)
                     result.append({
                         "date": idx.strftime("%Y-%m-%d"),
-                        base+"_crypto": int(row.get(keywords[0], 0)),
-                        base+"_price": int(row.get(keywords[1], 0)),
+                        "total": total,
+                        "keywords": related_keywords[:5],
                     })
                 _google_trends_cache["data"] = result
                 _google_trends_cache["ts"] = now
                 _google_trends_cache["symbol"] = sym
-                print(f"[TRENDS] {sym}: {len(result)} veri noktası")
+                print(f"[TRENDS] {sym}: {len(result)} gün, {len(related_keywords)} kelime")
                 return result
         except Exception as e:
             print(f"[TRENDS] Hata: {e}")
         
         return []
 
+def fetch_google_trends_hourly(sym=None):
+    """Google Trends saatlik veri — aynı kelimelerle."""
+    if sym is None:
+        sym = SYMBOL.replace("/", " ")
+    
+    # Daily'den kelimeleri al
+    daily_data = fetch_google_trends(sym)
+    if not daily_data or 'keywords' not in daily_data[0]:
+        return []
+    
+    keywords = daily_data[0]['keywords']
+    
+    try:
+        from pytrends.request import TrendReq
+        pytrend = TrendReq(hl='en-US', tz=360, timeout=(10, 25))
+        pytrend.build_payload(keywords[:5], timeframe='now 7-d', geo='US')
+        data = pytrend.interest_over_time()
+        
+        if data is not None and not data.empty:
+            result = []
+            for idx, row in data.iterrows():
+                total = sum(int(row.get(kw, 0) or 0) for kw in keywords[:5])
+                result.append({
+                    "date": idx.strftime("%Y-%m-%d %H:%M"),
+                    "total": total,
+                })
+            return result
+    except Exception as e:
+        print(f"[TRENDS-HOURLY] Hata: {e}")
+    
+    return []
+
 @app.route("/google_trends")
 def google_trends_endpoint():
     sym = flask_request.args.get("symbol", "").replace("/", " ") or None
+    period = flask_request.args.get("period", "daily")
+    
+    if period == "hourly":
+        return json.dumps(fetch_google_trends_hourly(sym))
     return json.dumps(fetch_google_trends(sym))
 
 @app.route("/set_keywords",methods=["POST"])
