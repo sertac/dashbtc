@@ -6355,12 +6355,20 @@ function renderPending(d){
 function renderClosed(d){
   const area=document.getElementById('closed-area');
   if(!d.closed||!d.closed.length){area.innerHTML='<div style="color:var(--text-dim);font-size:10px;padding:5px 0">Henüz kapanmadı</div>';return;}
-  
+
+  // Bugünün tarihini al (UTC+3 Türkiye saati)
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const localTime = new Date(now.getTime() - (offset*60000));
+  const todayStr = localTime.toISOString().split('T')[0];
+
   // Gün bazlı grupla
   const groups = {};
   d.closed.forEach(s=>{
     const openTsFull=s.open_ts||s.ts||'';
-    const datePart=openTsFull.includes(' ')?openTsFull.split(' ')[0]:'Bugün';
+    let datePart=openTsFull.includes(' ')?openTsFull.split(' ')[0]:'Bugün';
+    // Bugünün tarihi ise "Bugün" olarak işaretle
+    if(datePart === todayStr) datePart = 'Bugün';
     if(!groups[datePart]) groups[datePart]=[];
     groups[datePart].push(s);
   });
@@ -6881,11 +6889,19 @@ function renderFlashNews(d){
   itemsEl.innerHTML=`<span style="color:var(--purple);font-weight:700">📰 FLASH NEWS</span>${text}`;
 }
 
-// Google Trends — günlük + saatlik panel
+// Google Trends — sadece ilk yüklemede fetch, sonra cache'le
+let _gtrendsLoaded = false;
 async function renderGoogleTrends(){
-  const sym = window._lastSymbol || 'ETH/USDT';
-  renderGTrendPanel('daily', sym, 'gtrend-daily-panel', 'gtrend-daily-info', 'gtrend-daily-mini');
-  renderGTrendPanel('hourly', sym, 'gtrend-hourly-panel', 'gtrend-hourly-info', 'gtrend-hourly-mini');
+  if(_gtrendsLoaded) return;  // Sadece 1 kez yükle
+  _gtrendsLoaded = true;
+  
+  // 5 saniye gecikmeli yükle (sayfa açıldıktan sonra)
+  setTimeout(async () => {
+    const sym = window._lastSymbol || 'ETH/USDT';
+    renderGTrendPanel('daily', sym, 'gtrend-daily-panel', 'gtrend-daily-info', 'gtrend-daily-mini');
+    await new Promise(r => setTimeout(r, 2000));  // 2s bekle (rate limit önle)
+    renderGTrendPanel('hourly', sym, 'gtrend-hourly-panel', 'gtrend-hourly-info', 'gtrend-hourly-mini');
+  }, 5000);
 }
 
 async function renderGTrendPanel(period, sym, panelId, infoId, canvasId){
@@ -7083,7 +7099,7 @@ _google_trends_cache = {"data": [], "ts": 0, "symbol": ""}
 _google_trends_lock = threading.Lock()
 
 def fetch_google_trends(sym=None):
-    """Google Trends'ten arama ilgisi verisi çek — related_queries ile otomatik kelime bulma."""
+    """Google Trends'ten arama ilgisi verisi çek — sabit kelimelerle (daha az API çağrısı)."""
     if sym is None:
         sym = SYMBOL.replace("/", " ")
 
@@ -7097,69 +7113,57 @@ def fetch_google_trends(sym=None):
             from pytrends.request import TrendReq
             pytrend = TrendReq(hl='en-US', tz=360, timeout=(10, 25))
 
-            # Base kelime
-            base = sym.split()[0]  # ETH veya BTC
+            # Sabit kelimeler (related_queries API çağrısını atlıyoruz — rate limit!)
+            base = sym.split()[0]
+            if base == "ETH":
+                keywords = ["ethereum", "ethereum price", "eth price"]
+            elif base == "BTC":
+                keywords = ["bitcoin", "bitcoin price", "btc price"]
+            else:
+                keywords = [base, f"{base} price"]
             
-            # Related queries'den en popüler kelimeleri bul
-            related_keywords = []
-            try:
-                pytrend.build_payload([base], timeframe='today 3-m', geo='US')
-                related = pytrend.related_queries()
-                
-                # "top" queries'leri al
-                if base in related and related[base].get('top') is not None:
-                    top_queries = related[base]['top'].head(8)['query'].tolist()
-                    related_keywords = [base] + [q for q in top_queries if q != base]
-                    print(f"[TRENDS] Related queries for '{base}': {related_keywords}")
-            except Exception as e:
-                print(f"[TRENDS] Related queries error: {e}, using fallback")
-            
-            # Fallback
-            if not related_keywords:
-                if base == "BTC":
-                    related_keywords = ["bitcoin", "bitcoin price", "btc", "btc price", "bitcoin crypto"]
-                elif base == "ETH":
-                    related_keywords = ["ethereum", "ethereum price", "eth", "eth price", "ethereum crypto"]
-                else:
-                    related_keywords = [base, f"{base} price", f"{base} crypto"]
-            
-            # İlgi verisini çek (tüm kelimelerin toplamı)
-            pytrend.build_payload(related_keywords[:5], timeframe='today 3-m', geo='US')  # Max 5 kelime
+            pytrend.build_payload(keywords, timeframe='today 3-m', geo='US')
             data = pytrend.interest_over_time()
             
             if data is not None and not data.empty:
                 result = []
                 for idx, row in data.iterrows():
-                    # Tüm kelimelerin toplamı
-                    total = 0
-                    for kw in related_keywords[:5]:
-                        total += int(row.get(kw, 0) or 0)
+                    total = sum(int(row.get(kw, 0) or 0) for kw in keywords)
                     result.append({
                         "date": idx.strftime("%Y-%m-%d"),
                         "total": total,
-                        "keywords": related_keywords[:5],
+                        "keywords": keywords,
                     })
                 _google_trends_cache["data"] = result
                 _google_trends_cache["ts"] = now
                 _google_trends_cache["symbol"] = sym
-                print(f"[TRENDS] {sym}: {len(result)} gün, {len(related_keywords)} kelime")
+                print(f"[TRENDS] {sym}: {len(result)} gün, {len(keywords)} kelime")
                 return result
         except Exception as e:
             print(f"[TRENDS] Hata: {e}")
         
         return []
 
+_hourly_trends_cache = {"data": [], "ts": 0, "symbol": ""}
+
 def fetch_google_trends_hourly(sym=None):
-    """Google Trends saatlik veri — aynı kelimelerle."""
+    """Google Trends saatlik veri — sabit kelimelerle hızlı, cache'li."""
     if sym is None:
         sym = SYMBOL.replace("/", " ")
     
-    # Daily'den kelimeleri al
-    daily_data = fetch_google_trends(sym)
-    if not daily_data or 'keywords' not in daily_data[0]:
-        return []
+    import time
+    now = time.time()
+    # 5 dakika cache
+    if _hourly_trends_cache["ts"] > 0 and now - _hourly_trends_cache["ts"] < 300 and _hourly_trends_cache["symbol"] == sym:
+        return _hourly_trends_cache["data"]
     
-    keywords = daily_data[0]['keywords']
+    base = sym.split()[0]
+    if base == "ETH":
+        keywords = ["ethereum", "ethereum price", "eth", "eth price", "ethereum crypto"]
+    elif base == "BTC":
+        keywords = ["bitcoin", "bitcoin price", "btc", "btc price", "bitcoin crypto"]
+    else:
+        keywords = [base, f"{base} price", f"{base} crypto"]
     
     try:
         from pytrends.request import TrendReq
@@ -7175,9 +7179,16 @@ def fetch_google_trends_hourly(sym=None):
                     "date": idx.strftime("%Y-%m-%d %H:%M"),
                     "total": total,
                 })
+            _hourly_trends_cache["data"] = result
+            _hourly_trends_cache["ts"] = now
+            _hourly_trends_cache["symbol"] = sym
+            print(f"[TRENDS-HOURLY] {sym}: {len(result)} nokta, cache'lendi")
             return result
     except Exception as e:
         print(f"[TRENDS-HOURLY] Hata: {e}")
+        # Cache'ten eski veriyi döndür
+        if _hourly_trends_cache["data"]:
+            return _hourly_trends_cache["data"]
     
     return []
 
