@@ -576,6 +576,13 @@ def optimize_thresholds():
             print(f"[RL] _rl_apply_action çağrılıyor...")
             _rl_apply_action(new_action_idx)
             print(f"[RL] _rl_apply_action TAMAMLANDI - TP={TP_PCT}, SL={SL_PCT}")
+            
+            # min_score max 50 olsun — sinyal üretimi durmasın
+            if MIN_SCORE > 50:
+                _rl_thresholds["min_score"] = 50
+                MIN_SCORE = 50
+                print(f"[RL] min_score 50'ye clamp edildi")
+            
             _rl_initialized = True  # İlk optimizasyon yapıldı
 
             # Yeni thresholdları kaydet
@@ -1656,10 +1663,10 @@ def db_save_rl_state():
     _db_write(_save_qtable, wait=False)
 
 def db_load_rl_state():
-    """RL state'i DB'den yükle."""
+    """RL state'i DB'den yükle — signals_closed hariç (o signals tablosundan hesaplanır)."""
     import json
     global _rl_thresholds, _rl_stats, _rl_config, _rl_current_action_idx, _rl_initialized, _rl_q_table
-    
+
     try:
         rows = _db_read("SELECT key, value FROM rl_state WHERE key IN ('rl_thresholds','rl_stats','rl_config','rl_current_action_idx','rl_initialized')")
         for r in rows:
@@ -1667,14 +1674,16 @@ def db_load_rl_state():
             if key == "rl_thresholds":
                 _rl_thresholds.update(json.loads(val))
             elif key == "rl_stats":
-                _rl_stats.update(json.loads(val))
+                loaded_stats = json.loads(val)
+                # signals_closed'i DB'den YÜKLEME — o signals tablosundan hesaplanacak
+                _rl_stats.update({k: v for k, v in loaded_stats.items() if k != 'signals_closed'})
             elif key == "rl_config":
                 _rl_config.update(json.loads(val))
             elif key == "rl_current_action_idx":
                 _rl_current_action_idx = int(val)
             elif key == "rl_initialized":
                 _rl_initialized = val.lower() == "true"
-        
+
         # Q-table
         qrows = _db_read("SELECT state_hash, action_idx, q_value FROM rl_q_table")
         for r in qrows:
@@ -1682,7 +1691,7 @@ def db_load_rl_state():
             if sh not in _rl_q_table:
                 _rl_q_table[sh] = {}
             _rl_q_table[sh][int(r["action_idx"])] = float(r["q_value"])
-        
+
         if _rl_initialized:
             print(f"[RL] DB'den yüklendi: {_rl_stats['wins']}W/{_rl_stats['losses']}L, Reward={_rl_stats['total_reward']:+.1f}, Q-states={len(_rl_q_table)}")
     except Exception as e:
@@ -1698,7 +1707,7 @@ def load_signals():
     global _mkt_history, _rl_stats, _rl_last_signal
     try:
         db_init()
-        _mkt_history = db_load_market_history(symbol=SYMBOL, limit=120)
+        _mkt_history = db_load_market_history(symbol=SYMBOL, limit=5000)  # Tüm eski veri
         
         # RL stats — DB'den hesapla
         closed = db_load_closed(limit=1000)
@@ -1722,6 +1731,14 @@ def load_signals():
         
         # RL state DB'den yükle
         db_load_rl_state()
+        
+        # min_score max 50 olsun — sinyal üretimi durmasın
+        if _rl_thresholds.get("min_score", 40) > 50:
+            _rl_thresholds["min_score"] = 50
+            global MIN_SCORE
+            MIN_SCORE = 50
+            print(f"[RL] min_score DB'den 50'ye clamp edildi (was {max(_rl_thresholds.get('min_score', 40), 50)})")
+        
         print(f"[RL] {_rl_stats['wins']}W/{_rl_stats['losses']}L, Reward={_rl_stats['total_reward']:+.1f}")
         
         if _rl_stats["signals_closed"] >= _rl_config["min_signals"]:
@@ -1875,8 +1892,8 @@ def _mkt_add_history():
         _mkt_history.append(history_entry)
         print(f"[MKT HIST] Added entry, len={len(_mkt_history)}, id={id(_mkt_history)}", flush=True)
         # Son 120 veriyi tut (60 dakika = 1 saat, her 30 saniyede bir)
-        if len(_mkt_history) > 120:
-            _mkt_history = _mkt_history[-120:]
+        if len(_mkt_history) > 5000:
+            _mkt_history = _mkt_history[-5000:]
         # DB'ye kaydet
         db_insert_market_history(SYMBOL, {**history_entry, "ts": now_ts, **_mkt_cache})
     except Exception as e:
@@ -4748,6 +4765,15 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
         </div>
         <div style="position:relative;height:36px"><canvas id="gtrend-hourly-mini"></canvas></div>
       </div>
+      <!-- Piyasa Verisi Grafikleri (ayrı paneller, X ekseni mumlarla örtüşür) -->
+      <div style="background:var(--bg2);border-top:1px solid var(--border);padding:4px 0 0;flex-shrink:0">
+        <div style="font-size:8px;font-weight:700;color:var(--purple);padding:0 8px;margin-bottom:4px">📈 Piyasa Verisi (Tüm Geçmiş)</div>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:0 8px 4px">
+          <div style="position:relative;height:44px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden"><canvas id="sub-vol-oi" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas><div style="position:absolute;top:2px;left:4px;font-size:7px;color:var(--text-dim);pointer-events:none">Funding Rate</div></div>
+          <div style="position:relative;height:44px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden"><canvas id="sub-fr-tk" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas><div style="position:absolute;top:2px;left:4px;font-size:7px;color:var(--text-dim);pointer-events:none">Open Interest Δ</div></div>
+          <div style="position:relative;height:44px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden"><canvas id="sub-ls" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas><div style="position:absolute;top:2px;left:4px;font-size:7px;color:var(--text-dim);pointer-events:none">Long/Short Ratio</div></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -4769,6 +4795,11 @@ header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(
           <div class="wr-side-val" id="wr-short-rate" style="color:var(--red)">—</div>
           <div class="wr-side-sub" id="wr-short-meta">0 sinyal</div></div>
       </div>
+    </div>
+    <!-- GTrends Keywords -->
+    <div id="gtrends-box" style="background:var(--bg3);border-radius:5px;padding:8px 10px;margin-bottom:8px;border:1px solid var(--cyan)">
+      <div style="font-size:9px;font-weight:600;color:var(--cyan);margin-bottom:4px">🔍 GTrends Kelimeleri</div>
+      <div id="gtrends-keywords" style="font-size:10px;color:var(--text);line-height:1.6">ethereum, ethereum price, eth price, eth usd, ethereum usd, buy ethereum, ethereum news, what is ethereum, ethereum crypto, eth crypto</div>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
       <button onclick="clearSignals('pending')"
@@ -5311,6 +5342,169 @@ function drawChart(candles) {
   }
 }
 
+// Piyasa Verisi Alt Grafikleri (mum grafiği ile aynı X ekseninde, 5dk aggregate)
+function drawMarketSubCharts(history){
+  if(!history || history.length < 10) return;
+  
+  const mainContainer = document.getElementById('chart-container');
+  if(!mainContainer) return;
+  const mainW = mainContainer.clientWidth;
+  if(!mainW) return;
+  
+  const PL=6, PR=66;
+  const chartW = mainW - PL - PR;
+  
+  // Son 600 nokta = 5 saat → 5dk aggregate = 60 nokta (mumlarla birebir)
+  const recent = history.slice(-600);
+  if(!recent.length) return;
+  
+  // 5dk'lık gruplara böl (her grup = 10 nokta)
+  const aggregated = [];
+  const groupSize = 10;  // 10 × 30sn = 300sn = 5dk
+  for(let i = 0; i < recent.length; i += groupSize){
+    const chunk = recent.slice(i, i + groupSize);
+    if(!chunk.length) continue;
+    const avg = (arr, key) => arr.reduce((s, h) => s + (h[key] || 0), 0) / arr.length;
+    aggregated.push({
+      fr: avg(chunk, 'funding_rate'),
+      oi: avg(chunk, 'oi_change_pct'),
+      ls: avg(chunk, 'ls_ratio'),
+    });
+  }
+  
+  const step = chartW / (aggregated.length - 1);
+  
+  // Funding Rate (cyan) — sabit scale: ±0.0002 (±2bp), 0 çizgisi ortada
+  drawSubLineFixed('sub-vol-oi', aggregated.map((h,i) => ({
+    x: PL + i * step,
+    val: h.fr
+  })), '#00c8e0', 0.0002);
+  
+  // OI Change % (amber) — sabit scale: ±2%, 0 çizgisi ortada
+  drawSubLineFixed('sub-fr-tk', aggregated.map((h,i) => ({
+    x: PL + i * step,
+    val: h.oi
+  })), '#f0a500', 2.0);
+  
+  // L/S Ratio (green) — sabit scale: ±0.5, 1.0 ortada
+  drawSubLineFixed('sub-ls', aggregated.map((h,i) => ({
+    x: PL + i * step,
+    val: h.ls
+  })), '#00d264', 0.5, 1.0);
+}
+
+// Normalizasyonlu çizgi (min-max auto scale)
+function drawSubLine(canvasId, data, color, showMidLine){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !data.length) return;
+  const container = canvas.parentElement;
+  canvas.width = container.clientWidth || 300;
+  canvas.height = container.clientHeight || 44;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const vals = data.map(d => d.val).filter(v => v !== undefined);
+  if(!vals.length) return;
+  
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 0.01;
+  const H = canvas.height - 4;
+  
+  if(showMidLine){
+    const mid = (min + max) / 2;
+    const midY = 2 + H - ((mid - min) / range) * H;
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2,2]);
+    ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(canvas.width, midY); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const y = 2 + H - ((d.val - min) / range) * H;
+    if(i === 0) ctx.moveTo(d.x, y); else ctx.lineTo(d.x, y);
+  });
+  ctx.stroke();
+}
+
+// Sabit scale çizgi (ör: Funding Rate 0 merkezli)
+function drawSubLineFixed(canvasId, data, color, range, midVal){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !data.length) return;
+  const container = canvas.parentElement;
+  canvas.width = container.clientWidth || 300;
+  canvas.height = container.clientHeight || 44;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const W = canvas.width;
+  const H = canvas.height - 4;
+  const center = midVal || 0;  // 0 veya 1.0
+  
+  // 0 (veya mid) çizgisi — kalın ve belirgin
+  const centerY = 2 + H / 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(0, centerY); ctx.lineTo(W, centerY); ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // +range ve -range arka plan bölgeleri
+  const topY = 2;
+  const botY = H + 2;
+  
+  // Pozitif bölge (hafif yeşil)
+  ctx.fillStyle = 'rgba(0,210,100,0.04)';
+  ctx.fillRect(0, topY, W, centerY - topY);
+  // Negatif bölge (hafif kırmızı)
+  ctx.fillStyle = 'rgba(255,61,90,0.04)';
+  ctx.fillRect(0, centerY, W, botY - centerY);
+  
+  // +range çizgisi
+  const plusRangeY = 2;
+  const minusRangeY = botY;
+  ctx.strokeStyle = 'rgba(200,216,232,0.15)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2,2]);
+  ctx.beginPath(); ctx.moveTo(0, plusRangeY); ctx.lineTo(W, plusRangeY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, minusRangeY); ctx.lineTo(W, minusRangeY); ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Veri çizgisi
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let started = false;
+  data.forEach((d) => {
+    const normalized = (d.val - center) / range;
+    const y = centerY - normalized * (H / 2);
+    const clampedY = Math.max(topY, Math.min(botY, y));
+    if(!started) { ctx.moveTo(d.x, clampedY); started = true; }
+    else ctx.lineTo(d.x, clampedY);
+  });
+  ctx.stroke();
+  
+  // Sağ tarafta ölçü etiketleri
+  const labelRange = range >= 1 ? range.toFixed(1) : (range * 10000).toFixed(0) + 'bp';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'right';
+  
+  // +range etiketi (üst sağ)
+  ctx.fillStyle = 'rgba(0,210,100,0.8)';
+  ctx.fillText(`+${labelRange}`, W - 3, topY + 9);
+  
+  // 0 etiketi (orta sağ)
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText(center === 0 ? '0' : center.toFixed(1), W - 3, centerY + 3);
+  
+  // -range etiketi (alt sağ)
+  ctx.fillStyle = 'rgba(255,61,90,0.8)';
+  ctx.fillText(`-${labelRange}`, W - 3, botY - 3);
+}
+
 function initChart(candles){
   window._lastCandles=candles;
   let tries=0;
@@ -5318,7 +5512,7 @@ function initChart(candles){
     const el=document.getElementById('chart-container');
     const w=el?(el.clientWidth||el.offsetWidth):0;
     const h=el?(el.clientHeight||el.offsetHeight):0;
-    if((w>30&&h>30)||tries++>40){clearInterval(t);drawChart(candles);}
+    if((w>30&&h>30)||tries++>40){clearInterval(t);drawChart(candles);drawMarketSubCharts(window._lastMktHistory);}
   },80);
 }
 
@@ -6722,6 +6916,7 @@ src.onmessage=e=>{
   let d;try{d=JSON.parse(e.data);}catch(err){console.error('SSE',err);return;}
   if(d.symbol){window._lastSymbol=d.symbol;const sel=document.getElementById('symbol-select');if(sel&&sel.value!==d.symbol)sel.value=d.symbol;const lbl=document.getElementById('h-symbol-label');if(lbl){const p=d.symbol.split('/');lbl.innerHTML=p[0]+'<span>/'+( p[1]||'USDT')+'</span> · SİNYAL BOTU';}}
   window._state = d;  // Pozisyon P/L hesaplaması için current price
+  window._lastMktHistory = d.mkt_history || [];  // Piyasa verisi grafikleri için
   try{renderHeader(d);}catch(e){console.error('header',e);}
   try{renderOrderBook(d);}catch(e){console.error('orderbook',e);}
   try{renderTech(d);}catch(e){console.error('tech',e);}
@@ -6741,6 +6936,7 @@ src.onmessage=e=>{
   try{renderPositions();}catch(e){console.error('positions',e);}
   try{renderWinRateChart(d);}catch(e){console.error('wr_chart',e);}
   try{renderGoogleTrends();}catch(e){console.error('gtrends',e);}
+  try{drawMarketSubCharts(window._lastMktHistory);}catch(e){console.error('mkt_sub',e);}
   // Kalman geçmişini window'a kaydet (grafik için)
   if(d.kalman_history) window._kalman_price_history = d.kalman_history;
   // Predictions'ı window'a kaydet (grafik için)
@@ -6798,10 +6994,12 @@ function renderRlStatus(d){
     }
   }
   // Progress göster (5 sinyalde bir optimize)
-  const progress=rl.signals_closed!==undefined?rl.signals_closed%5:0;
+  // İlerleme çubuğu (optimize_every sinyal = bir optimizasyon)
+  const optEvery = rl.optimize_every || 3;
+  const progress=rl.signals_closed!==undefined?rl.signals_closed%optEvery:0;
   const qStatesEl=document.getElementById('rl-q-states');
   if(qStatesEl && rl.signals_closed!==undefined){
-    qStatesEl.textContent=`${rl.q_states||0} (${5-progress} sinyal)`;
+    qStatesEl.textContent=`${rl.q_states||0} state (${optEvery-progress} sinyal sonra optimizasyon)`;
   }
 }
 
@@ -6892,25 +7090,42 @@ function renderFlashNews(d){
 // Google Trends — sadece ilk yüklemede fetch, sonra cache'le
 let _gtrendsLoaded = false;
 async function renderGoogleTrends(){
-  if(_gtrendsLoaded) return;  // Sadece 1 kez yükle
+  if(_gtrendsLoaded) return;
   _gtrendsLoaded = true;
+  console.log('[GTrends] Starting fetch in 3s...');
   
-  // 5 saniye gecikmeli yükle (sayfa açıldıktan sonra)
+  // Önce kelimeleri göster (sembol bazlı)
+  const sym = window._lastSymbol || 'ETH/USDT';
+  const base = sym.split('/')[0];
+  const fallbackKws = {
+    'ETH': 'ethereum, ethereum price, eth price, eth usd, ethereum usd, buy ethereum, ethereum news, what is ethereum, ethereum crypto, eth crypto',
+    'BTC': 'bitcoin, bitcoin price, btc price, btc usd, bitcoin usd, buy bitcoin, bitcoin news, what is bitcoin, bitcoin crypto, btc crypto',
+    'SOL': 'solana, solana price, sol price, sol usd, solana usd, buy solana, solana news, sol crypto',
+  };
+  const kwsEl = document.getElementById('gtrends-keywords');
+  if(kwsEl) kwsEl.textContent = fallbackKws[base] || `${base}, ${base} price`;
+  
   setTimeout(async () => {
-    const sym = window._lastSymbol || 'ETH/USDT';
-    renderGTrendPanel('daily', sym, 'gtrend-daily-panel', 'gtrend-daily-info', 'gtrend-daily-mini');
-    await new Promise(r => setTimeout(r, 2000));  // 2s bekle (rate limit önle)
-    renderGTrendPanel('hourly', sym, 'gtrend-hourly-panel', 'gtrend-hourly-info', 'gtrend-hourly-mini');
-  }, 5000);
+    try{
+      console.log('[GTrends] Fetching daily...');
+      await renderGTrendPanel('daily', sym, 'gtrend-daily-panel', 'gtrend-daily-info', 'gtrend-daily-mini');
+      await new Promise(r => setTimeout(r, 2000));
+      console.log('[GTrends] Fetching hourly...');
+      await renderGTrendPanel('hourly', sym, 'gtrend-hourly-panel', 'gtrend-hourly-info', 'gtrend-hourly-mini');
+    }catch(e){
+      console.error('[GTrends] Error:', e);
+    }
+  }, 3000);
 }
 
 async function renderGTrendPanel(period, sym, panelId, infoId, canvasId){
   const panel = document.getElementById(panelId);
-  if(!panel) return;
+  if(!panel){ console.log(`[GTrends] Panel ${panelId} not found`); return; }
 
   try{
     const res = await fetch(`/google_trends?symbol=${encodeURIComponent(sym)}&period=${period}`);
     const data = await res.json();
+    console.log(`[GTrends ${period}] Got ${data ? data.length : 0} points`);
     if(!data || data.length < 5){ panel.style.display='none'; return; }
 
     const key = 'total';
@@ -6924,15 +7139,27 @@ async function renderGTrendPanel(period, sym, panelId, infoId, canvasId){
     const avg = recent.reduce((s, d) => s + (d[key] || 0), 0) / recent.length;
     const today = recent[recent.length - 1][key] || 0;
     const level = maxVal >= 80 ? 'YÜKSEK 🔥' : maxVal >= 40 ? 'NORMAL 📊' : 'DÜŞÜK 💤';
-    const firstStr = recent[0].date || '';
-    const lastStr = recent[recent.length-1].date || '';
 
     document.getElementById(infoId).textContent = `${recent.length} ${isHourly ? 'saat' : 'gün'} | Max: ${maxVal} | Ort: ${Math.round(avg)} | ${level}`;
 
+    // Kelimeleri sağ panelde göster
+    const kwsEl = document.getElementById('gtrends-keywords');
+    if(kwsEl && data[0] && data[0].keywords){
+      kwsEl.textContent = data[0].keywords.join(', ');
+      console.log(`[GTrends] Keywords shown: ${data[0].keywords.join(', ')}`);
+    } else if(kwsEl) {
+      console.log(`[GTrends] No keywords in data. First item:`, data[0]);
+      kwsEl.textContent = 'Kelime bilgisi yok';
+    }
+
+    // ÖNCE paneli göster (width doğru hesaplansın)
+    panel.style.display = 'block';
+
+    // Sonra canvas boyutunu al
     const canvas = document.getElementById(canvasId);
     if(!canvas) return;
     const container = canvas.parentElement;
-    canvas.width = container.clientWidth;
+    canvas.width = container.clientWidth || 300;  // Fallback
     canvas.height = 36;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6972,9 +7199,10 @@ async function renderGTrendPanel(period, sym, panelId, infoId, canvasId){
     }
 
     panel.style.display = 'block';
+    console.log(`[GTrends ${period}] Panel shown`);
 
   }catch(e){
-    console.error(`GTrends ${period}:`, e);
+    console.error(`[GTrends ${period}] Error:`, e);
     panel.style.display = 'none';
   }
 }
@@ -7107,20 +7335,21 @@ def fetch_google_trends(sym=None):
         import time
         now = time.time()
         if _google_trends_cache["ts"] > 0 and now - _google_trends_cache["ts"] < 3600 and _google_trends_cache["symbol"] == sym:
-            return _google_trends_cache["data"]
+            if _google_trends_cache["data"]:  # Sadece dolu cache döndür
+                return _google_trends_cache["data"]
 
         try:
             from pytrends.request import TrendReq
             pytrend = TrendReq(hl='en-US', tz=360, timeout=(10, 25))
 
-            # Sabit kelimeler (related_queries API çağrısını atlıyoruz — rate limit!)
-            base = sym.split()[0]
+            # Sabit kelimeler (max 5 - Google limit)
+            base = sym.replace("USDT", "").replace("/", "").strip()  # ETH/USDT → ETH
             if base == "ETH":
-                keywords = ["ethereum", "ethereum price", "eth price"]
+                keywords = ["ethereum", "ethereum price", "eth price", "buy ethereum", "ethereum news"]
             elif base == "BTC":
-                keywords = ["bitcoin", "bitcoin price", "btc price"]
+                keywords = ["bitcoin", "bitcoin price", "btc price", "buy bitcoin", "bitcoin news"]
             else:
-                keywords = [base, f"{base} price"]
+                keywords = [base, f"{base} price", f"buy {base.lower()}", f"{base.lower()} news"][:5]
             
             pytrend.build_payload(keywords, timeframe='today 3-m', geo='US')
             data = pytrend.interest_over_time()
@@ -7157,13 +7386,13 @@ def fetch_google_trends_hourly(sym=None):
     if _hourly_trends_cache["ts"] > 0 and now - _hourly_trends_cache["ts"] < 300 and _hourly_trends_cache["symbol"] == sym:
         return _hourly_trends_cache["data"]
     
-    base = sym.split()[0]
+    base = sym.replace("USDT", "").replace("/", "").strip()  # ETH/USDT → ETH
     if base == "ETH":
-        keywords = ["ethereum", "ethereum price", "eth", "eth price", "ethereum crypto"]
+        keywords = ["ethereum", "ethereum price", "eth price", "buy ethereum", "ethereum news"]
     elif base == "BTC":
-        keywords = ["bitcoin", "bitcoin price", "btc", "btc price", "bitcoin crypto"]
+        keywords = ["bitcoin", "bitcoin price", "btc price", "buy bitcoin", "bitcoin news"]
     else:
-        keywords = [base, f"{base} price", f"{base} crypto"]
+        keywords = [base, f"{base} price", f"buy {base.lower()}", f"{base.lower()} news"][:5]
     
     try:
         from pytrends.request import TrendReq
@@ -7178,6 +7407,7 @@ def fetch_google_trends_hourly(sym=None):
                 result.append({
                     "date": idx.strftime("%Y-%m-%d %H:%M"),
                     "total": total,
+                    "keywords": keywords[:5],
                 })
             _hourly_trends_cache["data"] = result
             _hourly_trends_cache["ts"] = now
